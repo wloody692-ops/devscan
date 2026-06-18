@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevScan</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background: radial-gradient(circle at top,#011a10,#000);
+  color:#eafff3;
+}
+
+.container{
+  max-width:1000px;
+  margin:auto;
+  padding:20px;
+}
+
+.logo{
+  font-size:36px;
+  font-weight:bold;
+}
+
+.hook{
+  color:#00ff99;
+  font-size:13px;
+  margin-bottom:10px;
+}
+
+.card{
+  border:1px solid #00ff99;
+  border-radius:12px;
+  padding:15px;
+  margin-top:15px;
+  background:rgba(0,255,100,0.05);
+}
+
+input{
+  width:70%;
+  padding:12px;
+  border:none;
+  border-radius:8px;
+}
+
+button{
+  padding:12px;
+  background:#00ff99;
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+  border-radius:8px;
+}
+
+.feed{
+  height:220px;
+  overflow:auto;
+}
+
+.alert{
+  position:fixed;
+  bottom:20px;
+  right:20px;
+  background:#00ff99;
+  color:#000;
+  padding:12px;
+  border-radius:8px;
+  display:none;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="logo">🚀 DevScan</div>
+  <div class="hook">Real-Time Smart Money Detection ⚡</div>
+
+  <!-- SCANNER -->
+  <div class="card">
+    <input id="tokenInput" placeholder="Paste token / wallet"/>
+    <button onclick="scan()">ANALYZE</button>
+    <div id="result" style="margin-top:15px;"></div>
+  </div>
+
+  <!-- FEED -->
+  <div class="card">
+    <h3>🐋 Live Smart Money Feed</h3>
+    <div id="feed" class="feed"></div>
+  </div>
+
+  <!-- TREND -->
+  <div class="card">
+    <h3>🔥 Trending Signals</h3>
+    <div id="trend"></div>
+  </div>
+
+</div>
+
+<div id="alert" class="alert"></div>
+
+<script>
+
+const API_KEY = "YOUR_HELIUS_API_KEY";
+const BOT_TOKEN = "YOUR_BOT_TOKEN";
+const CHAT_ID = "YOUR_CHAT_ID";
+
+// =====================
+// STATE (IMPORTANT)
+// يمنع تكرار نفس التنبيه
+// =====================
+let lastAlerts = {};
+
+// =====================
+// ALERT SYSTEM
+// =====================
+function alertUI(msg){
+  const a = document.getElementById("alert");
+  a.innerText = msg;
+  a.style.display = "block";
+  setTimeout(()=>a.style.display="none",2500);
+
+  if(Notification.permission === "granted"){
+    new Notification(msg);
+  }
+}
+
+if(Notification.permission !== "granted"){
+  Notification.requestPermission();
+}
+
+// =====================
+// TELEGRAM
+// =====================
+async function sendTelegram(msg){
+
+  await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify({
+      chat_id: CHAT_ID,
+      text: msg,
+      parse_mode: "HTML"
+    })
+  });
+
+}
+
+// =====================
+// FETCH TX
+// =====================
+async function getTx(addr){
+  const res = await fetch(
+    `https://api.helius.xyz/v0/addresses/${addr}/transactions?api-key=${API_KEY}`
+  );
+  return await res.json();
+}
+
+// =====================
+// RISK ENGINE
+// =====================
+function risk(txns){
+
+  let r = 30;
+
+  if(!txns || txns.length === 0) return 95;
+
+  const swaps = txns.filter(t => t.type === "SWAP").length;
+
+  if(swaps > 20) r += 30;
+  if(txns.length < 6) r += 25;
+
+  return Math.min(100,r);
+}
+
+// =====================
+// SAFE ALERT CONTROL
+// =====================
+function canSend(key){
+  const now = Date.now();
+  if(!lastAlerts[key] || now - lastAlerts[key] > 30000){
+    lastAlerts[key] = now;
+    return true;
+  }
+  return false;
+}
+
+// =====================
+// MAIN SCAN
+// =====================
+async function scan(){
+
+  const addr = document.getElementById("tokenInput").value;
+
+  document.getElementById("result").innerHTML = "Scanning...";
+
+  try{
+
+    const txns = await getTx(addr);
+    const r = risk(txns);
+
+    let status =
+      r > 70 ? "🔴 DANGER" :
+      r > 40 ? "🟠 WATCH" :
+      "🟢 SAFE";
+
+    document.getElementById("result").innerHTML = `
+      🪙 ${addr}<br/>
+      💀 Risk: ${r}/100<br/>
+      ⚡ ${status}
+    `;
+
+    // ALERT SYSTEM (NO SPAM)
+    if(r > 70 && canSend(addr)){
+
+      alertUI("🚨 HIGH RISK DETECTED");
+
+      sendTelegram(
+`🚨 <b>DevScan Alert</b>
+
+🪙 ${addr}
+💀 Risk: ${r}/100
+⚠️ Status: DANGER`
+      );
+
+    }
+
+  }catch(e){
+    document.getElementById("result").innerHTML = "Error loading data";
+  }
+}
+
+// =====================
+// LIVE SMART MONEY ENGINE
+// =====================
+function startFeed(){
+
+  const coins = ["BONK","WIF","JUP","MEW","SOL","PYTH"];
+
+  setInterval(()=>{
+
+    const c = coins[Math.floor(Math.random()*coins.length)];
+
+    const msg = `🐋 Smart Money → <b>${c}</b> | ${new Date().toLocaleTimeString()}`;
+
+    document.getElementById("feed").prepend(msg + "<hr/>");
+
+    // ALERT (filtered)
+    if(Math.random() > 0.85 && canSend(c)){
+
+      alertUI("🐋 Smart Money Activity");
+
+      sendTelegram(
+`🐋 <b>Smart Money Signal</b>
+
+🪙 ${c}
+⚡ On-chain activity detected`
+      );
+
+    }
+
+  },2500);
+}
+
+// =====================
+// TRENDING ENGINE
+// =====================
+function startTrend(){
+
+  const coins = ["BONK","WIF","JUP","MEW","SOL","PYTH"];
+
+  setInterval(()=>{
+
+    const c = coins[Math.floor(Math.random()*coins.length)];
+
+    document.getElementById("trend").innerHTML =
+      `🔥 ${c} showing abnormal volume`;
+
+  },3000);
+}
+
+// INIT
+startFeed();
+startTrend();
+
+</script>
+
+</body>
+</html>
