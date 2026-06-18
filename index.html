@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevScan Filter</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#010f0b,#000);
+color:#eafff3;
+}
+
+.container{
+max-width:950px;
+margin:auto;
+padding:20px;
+}
+
+.logo{
+font-size:44px;
+font-weight:bold;
+}
+
+.sub{
+color:#00ff99;
+font-size:13px;
+margin-bottom:10px;
+}
+
+.card{
+border:1px solid #00ff99;
+border-radius:14px;
+padding:15px;
+background:rgba(0,255,100,0.05);
+margin-top:15px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+padding:12px;
+border:1px solid rgba(0,255,100,0.3);
+border-radius:12px;
+margin-bottom:10px;
+background:rgba(0,255,100,0.03);
+}
+
+.green{color:#00ff99}
+.orange{color:#ffb84d}
+.red{color:#ff4d4d}
+.blue{color:#1DA1F2}
+
+button{
+padding:10px;
+background:#00ff99;
+border:none;
+border-radius:10px;
+cursor:pointer;
+font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="logo">🚀 DevScan</div>
+<div class="sub">Filtered Opportunities Engine</div>
+
+<button onclick="load()">🔄 Refresh Best Coins</button>
+
+<div class="card" id="list">Loading...</div>
+
+</div>
+
+<script>
+
+// ================= FETCH =================
+async function getPairs(){
+try{
+const r = await fetch("https://api.dexscreener.com/latest/dex/search/?q=solana");
+const d = await r.json();
+return d.pairs || [];
+}catch{
+return [];
+}
+}
+
+// ================= FILTER ENGINE =================
+function score(pair){
+
+let liq = pair.liquidity?.usd || 0;
+let vol = pair.volume?.h24 || 0;
+
+let score = 0;
+
+// liquidity health
+if(liq > 100000) score += 40;
+else if(liq > 30000) score += 25;
+else if(liq < 5000) score -= 30;
+
+// volume strength
+if(vol > 200000) score += 40;
+else if(vol > 50000) score += 20;
+else if(vol < 10000) score -= 20;
+
+// volume/liq ratio (momentum)
+let ratio = vol / (liq || 1);
+if(ratio > 1) score += 20;
+if(ratio > 2) score += 10;
+
+// whale hint (very rough)
+if(vol > 300000) score += 10;
+
+let label = "⚪ LOW QUALITY";
+
+if(score >= 80) label = "🔥 HOT ENTRY";
+else if(score >= 60) label = "🟢 GOOD";
+else if(score >= 40) label = "🟡 WATCH";
+else label = "🔴 RISKY";
+
+return {score,label};
+}
+
+// ================= RENDER =================
+function render(pairs){
+
+if(!pairs.length){
+document.getElementById("list").innerHTML="No data";
+return;
+}
+
+// sort best first
+pairs = pairs
+.sort((a,b)=> (score(b).score - score(a).score))
+.slice(0,10);
+
+let html="";
+
+pairs.forEach(p=>{
+
+let s = score(p);
+
+html += `
+<div class="row">
+<b>${p.baseToken?.name || "Unknown"} (${p.baseToken?.symbol || ""})</b>
+<span class="${s.score>80?'red':s.score>60?'green':s.score>40?'orange':'blue'}">
+${s.label}
+</span>
+</div>
+`;
+});
+
+document.getElementById("list").innerHTML=html;
+}
+
+// ================= MAIN =================
+async function load(){
+
+document.getElementById("list").innerHTML="Analyzing...";
+
+const pairs = await getPairs();
+render(pairs);
+}
+
+// auto start
+load();
+setInterval(load,15000);
+
+</script>
+
+</body>
+</html>
