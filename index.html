@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevScan</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background: radial-gradient(circle at top,#021a12,#000);
+  color:#eafff3;
+}
+
+.container{
+  max-width:1000px;
+  margin:auto;
+  padding:20px;
+}
+
+.logo{
+  font-size:44px;
+  font-weight:bold;
+}
+
+.hook{
+  color:#00ff99;
+  font-size:13px;
+  margin:10px 0 15px;
+}
+
+.card{
+  border:1px solid #00ff99;
+  border-radius:12px;
+  padding:15px;
+  background:rgba(0,255,100,0.05);
+  margin-top:15px;
+}
+
+input{
+  width:70%;
+  padding:12px;
+  border:none;
+  border-radius:8px;
+}
+
+button{
+  padding:12px;
+  background:#00ff99;
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+  border-radius:8px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+}
+
+.box{
+  padding:14px;
+  border:1px solid #0f3;
+  border-radius:12px;
+  background:rgba(0,255,100,0.04);
+}
+
+.green{color:#00ff99}
+.red{color:#ff4d4d}
+.orange{color:#ffb84d}
+.white{color:#fff}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="logo">🚀 DevScan</div>
+  <div class="hook">Smart Money • Whale Tracking • Entry/Exit Signals</div>
+
+  <div class="card">
+    <input id="input" placeholder="Paste token mint address"/>
+    <button onclick="analyze()">ANALYZE</button>
+  </div>
+
+  <div class="card" id="result">Waiting...</div>
+
+</div>
+
+<script>
+
+const HELIUS_KEY = "1f3e9d07-b2ef-4448-9b62-6938069c82dd";
+
+// =========================
+// DEX DATA
+// =========================
+async function getDex(address){
+  try{
+    const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${address}`);
+    const data = await res.json();
+    const pair = data.pairs?.[0];
+
+    return {
+      name: pair?.baseToken?.name || "Unknown",
+      symbol: pair?.baseToken?.symbol || "",
+      price: pair?.priceUsd || 0,
+      liquidity: pair?.liquidity?.usd || 0,
+      volume: pair?.volume?.h24 || 0
+    };
+  }catch(e){
+    return {name:"Unknown",symbol:"",price:0,liquidity:0,volume:0};
+  }
+}
+
+// =========================
+// ON-CHAIN DATA
+// =========================
+async function getTx(address){
+  try{
+    const res = await fetch(
+      `https://api.helius.xyz/v0/addresses/${address}/transactions?api-key=${HELIUS_KEY}`
+    );
+    return await res.json();
+  }catch(e){
+    return [];
+  }
+}
+
+// =========================
+// SIGNAL ENGINE
+// =========================
+function analyzeTx(txns){
+
+  const swaps = txns?.filter(t => t.type === "SWAP").length || 0;
+  const total = txns?.length || 0;
+
+  let risk = 20;
+  risk += total < 5 ? 30 : 0;
+  risk += swaps === 0 ? 30 : 0;
+  risk += swaps > 25 ? 40 : 0;
+
+  const smart = swaps > 20 && total > 10;
+  const whale = swaps > 30 || total > 60;
+
+  let signal = "⚪ NEUTRAL";
+
+  // 🟢 ENTRY
+  if (smart && swaps > 15 && total > 15) {
+    signal = "🟢 ENTRY SIGNAL (BUY ZONE)";
+  }
+
+  // 🔴 EXIT
+  if (whale && risk > 70) {
+    signal = "🔴 EXIT SIGNAL (RISK ZONE)";
+  }
+
+  // ⚠️ NO TRACTION
+  if (swaps < 5 && total < 10) {
+    signal = "⚠️ LOW ACTIVITY";
+  }
+
+  return {
+    risk: Math.min(100,risk),
+    swaps,
+    total,
+    smart,
+    whale,
+    signal
+  };
+}
+
+// =========================
+// MAIN
+// =========================
+async function analyze(){
+
+  const addr = document.getElementById("input").value;
+
+  if(!addr){
+    document.getElementById("result").innerHTML = "Enter address";
+    return;
+  }
+
+  document.getElementById("result").innerHTML = "Analyzing...";
+
+  const [dex, txns] = await Promise.all([
+    getDex(addr),
+    getTx(addr)
+  ]);
+
+  const d = analyzeTx(txns);
+
+  document.getElementById("result").innerHTML = `
+
+    <div class="grid">
+
+      <div class="box">
+        🪙 Token<br>
+        <b>${dex.name} (${dex.symbol})</b>
+      </div>
+
+      <div class="box">
+        💰 Price<br>
+        <b>$${dex.price}</b>
+      </div>
+
+      <div class="box">
+        💧 Liquidity<br>
+        <b>$${Number(dex.liquidity).toLocaleString()}</b>
+      </div>
+
+      <div class="box">
+        📊 Volume 24h<br>
+        <b>$${Number(dex.volume).toLocaleString()}</b>
+      </div>
+
+      <div class="box">
+        💀 Risk Score<br>
+        <b class="${d.risk>70?'red':d.risk>40?'orange':'green'}">
+          ${d.risk}/100
+        </b>
+      </div>
+
+      <div class="box">
+        🔁 Swaps<br>
+        <b>${d.swaps}</b>
+      </div>
+
+      <div class="box">
+        🧠 Smart Money<br>
+        <b class="${d.smart?'green':'red'}">
+          ${d.smart ? "DETECTED 🐋" : "NO SIGNAL"}
+        </b>
+      </div>
+
+      <div class="box">
+        🐋 Whale Activity<br>
+        <b class="${d.whale?'orange':'green'}">
+          ${d.whale ? "ACTIVE" : "NONE"}
+        </b>
+      </div>
+
+      <div class="box">
+        ⚡ Trading Signal<br>
+        <b class="white">${d.signal}</b>
+      </div>
+
+    </div>
+
+  `;
+}
+
+</script>
+
+</body>
+</html>
