@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevScan Live</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#010f0b,#000);
+color:#eafff3;
+}
+
+.container{
+max-width:950px;
+margin:auto;
+padding:20px;
+}
+
+.logo{
+font-size:42px;
+font-weight:bold;
+}
+
+.sub{
+color:#00ff99;
+font-size:13px;
+margin-bottom:10px;
+}
+
+.live{
+color:#00ff99;
+font-size:12px;
+margin-bottom:15px;
+animation:blink 1s infinite;
+}
+
+@keyframes blink{
+50%{opacity:0.3}
+}
+
+.card{
+border:1px solid #00ff99;
+border-radius:14px;
+padding:15px;
+background:rgba(0,255,100,0.05);
+margin-top:15px;
+}
+
+input{
+width:70%;
+padding:12px;
+border:none;
+border-radius:10px;
+}
+
+button{
+padding:12px;
+background:#00ff99;
+border:none;
+font-weight:bold;
+cursor:pointer;
+border-radius:10px;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:14px;
+margin-bottom:10px;
+border:1px solid rgba(0,255,100,0.35);
+border-radius:12px;
+background:rgba(0,255,100,0.04);
+}
+
+.row span{color:#9effc9;font-weight:bold}
+.row b{max-width:60%;text-align:right;word-break:break-all}
+
+.green{color:#00ff99}
+.red{color:#ff4d4d}
+.orange{color:#ffb84d}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="logo">🚀 DevScan</div>
+<div class="sub">Smart Money • Whale Tracking • Entry Signals</div>
+<div class="live">● LIVE MODE</div>
+
+<div class="card">
+<input id="input" placeholder="Paste token mint address"/>
+<button onclick="startLive()">START</button>
+</div>
+
+<div class="card" id="result">Waiting...</div>
+
+</div>
+
+<script>
+
+const HELIUS_KEY = "PUT_YOUR_API_KEY_HERE";
+
+let token=null;
+let lastState="";
+let interval=null;
+
+// ================= DEX =================
+async function getDex(addr){
+try{
+const r=await fetch(`https://api.dexscreener.com/latest/dex/tokens/${addr}`);
+const d=await r.json();
+const p=d.pairs?.[0];
+
+return {
+name:p?.baseToken?.name||"Unknown",
+symbol:p?.baseToken?.symbol||"",
+price:Number(p?.priceUsd||0),
+liquidity:Number(p?.liquidity?.usd||0),
+volume:Number(p?.volume?.h24||0),
+mc:Number(p?.fdv||0)
+};
+}catch{
+return {name:"Unknown",symbol:"",price:0,liquidity:0,volume:0,mc:0};
+}
+}
+
+// ================= TX =================
+async function getTx(addr){
+try{
+const r=await fetch(`https://api.helius.xyz/v0/addresses/${addr}/transactions?api-key=${HELIUS_KEY}`);
+return await r.json();
+}catch{return []}
+}
+
+// ================= DEV GUESS =================
+function guessDev(txns){
+if(!txns?.length) return "Unknown";
+return txns[txns.length-1]?.feePayer || "Unknown";
+}
+
+// ================= SMART ANALYTICS =================
+function analyze(txns,dex){
+
+const swaps=txns?.filter(x=>x.type==="SWAP").length||0;
+const total=txns?.length||0;
+
+let risk=10;
+
+// low liquidity = risk
+if(dex.liquidity<5000) risk+=25;
+
+// low activity
+if(total<5) risk+=25;
+
+// no swaps
+if(swaps===0) risk+=20;
+
+// heavy spam activity = suspicious
+if(swaps>40) risk+=20;
+
+// pump momentum
+let momentum=(dex.volume/(dex.liquidity||1))*100;
+
+// whale indicator (rough)
+let whale=(swaps>25 || total>60);
+
+// smart money approximation
+let smart=swaps>15 && dex.volume>100000;
+
+let signal="⚪ NEUTRAL";
+
+if(momentum>40 && smart) signal="🟢 PUMP MOMENTUM";
+if(risk>70) signal="🔴 RUG RISK";
+if(swaps<5) signal="🟡 LOW ACTIVITY";
+
+return {
+risk:Math.min(100,risk),
+swaps,
+total,
+smart,
+whale,
+momentum:momentum.toFixed(1),
+signal
+};
+}
+
+// ================= RENDER =================
+function render(dex,d,dev){
+
+const state=JSON.stringify(d);
+
+if(state===lastState) return; // no update
+lastState=state;
+
+document.getElementById("result").innerHTML=`
+
+<div class="row"><span>🪙 Token</span><b>${dex.name} (${dex.symbol})</b></div>
+
+<div class="row"><span>👨‍💻 Dev Wallet</span><b>${dev}</b></div>
+
+<div class="row"><span>💰 Price</span><b>$${dex.price}</b></div>
+
+<div class="row"><span>🏦 Market Cap</span><b>$${dex.mc.toLocaleString()}</b></div>
+
+<div class="row"><span>💧 Liquidity</span><b>$${dex.liquidity.toLocaleString()}</b></div>
+
+<div class="row"><span>📊 Volume</span><b>$${dex.volume.toLocaleString()}</b></div>
+
+<div class="row"><span>⚡ Momentum</span><b>${d.momentum}</b></div>
+
+<div class="row"><span>💀 Risk Score</span>
+<b class="${d.risk>70?'red':d.risk>40?'orange':'green'}">${d.risk}/100</b>
+</div>
+
+<div class="row"><span>🧠 Smart Money</span>
+<b class="${d.smart?'green':'red'}">${d.smart?'DETECTED':'NO SIGNAL'}</b>
+</div>
+
+<div class="row"><span>🐋 Whale Pressure</span>
+<b class="${d.whale?'orange':'green'}">${d.whale?'HIGH':'LOW'}</b>
+</div>
+
+<div class="row"><span>⚡ Signal</span><b>${d.signal}</b></div>
+
+`;
+}
+
+// ================= LIVE LOOP =================
+async function update(){
+
+if(!token) return;
+
+const [dex,txns]=await Promise.all([
+getDex(token),
+getTx(token)
+]);
+
+const d=analyze(txns,dex);
+const dev=guessDev(txns);
+
+render(dex,d,dev);
+}
+
+// ================= START =================
+function startLive(){
+
+token=document.getElementById("input").value;
+if(!token) return;
+
+update();
+
+if(interval) clearInterval(interval);
+interval=setInterval(update,8000); // أسرع تحديث
+}
+
+</script>
+
+</body>
+</html>
