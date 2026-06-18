@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>DevScan</title>
+
+<style>
+body{
+  margin:0;
+  font-family:Arial;
+  background: radial-gradient(circle at top,#011a10,#000);
+  color:#eafff3;
+}
+
+.container{
+  max-width:900px;
+  margin:auto;
+  padding:20px;
+}
+
+.logo{
+  font-size:38px;
+  font-weight:bold;
+}
+
+.hook{
+  color:#00ff99;
+  font-size:13px;
+  margin-bottom:15px;
+}
+
+.card{
+  border:1px solid #00ff99;
+  border-radius:12px;
+  padding:15px;
+  margin-top:15px;
+  background:rgba(0,255,100,0.05);
+}
+
+input{
+  width:70%;
+  padding:12px;
+  border:none;
+  border-radius:8px;
+}
+
+button{
+  padding:12px;
+  background:#00ff99;
+  border:none;
+  font-weight:bold;
+  cursor:pointer;
+  border-radius:8px;
+}
+
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:10px;
+}
+
+.box{
+  padding:12px;
+  border:1px solid #0f3;
+  border-radius:10px;
+  background:rgba(0,255,100,0.04);
+}
+
+.green{color:#00ff99;}
+.red{color:#ff4d4d;}
+.orange{color:#ffb84d;}
+.small{font-size:12px;opacity:0.8;}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <div class="logo">🚀 DevScan</div>
+  <div class="hook">Smart On-Chain Simulation • Risk Engine • Dev Tracking</div>
+
+  <div class="card">
+    <input id="token" placeholder="Paste token or wallet"/>
+    <button onclick="analyze()">ANALYZE</button>
+  </div>
+
+  <div class="card" id="result">
+    <div class="small">Waiting for input...</div>
+  </div>
+
+</div>
+
+<script>
+
+// =========================
+// 🔥 REALISTIC SIM ENGINE
+// (بدون API لكن منطق ذكي)
+// =========================
+function hash(str){
+  let h = 0;
+  for(let i=0;i<str.length;i++){
+    h = (h * 31 + str.charCodeAt(i)) % 100000;
+  }
+  return h;
+}
+
+// =========================
+// GENERATE FAKE ON-CHAIN STYLE DATA
+// =========================
+function analyzeData(addr){
+
+  const h = hash(addr);
+
+  const risk = h % 100;
+  const holders = 500 + (h % 9000);
+  const volume = 1000 + (h % 800000);
+  const liquidity = 300 + (h % 20000);
+
+  const swaps = h % 50;
+  const smartMoney = swaps > 20;
+  const devActive = (h % 3 === 0);
+
+  return {
+    risk,
+    holders,
+    volume,
+    liquidity,
+    swaps,
+    smartMoney,
+    devActive
+  };
+}
+
+// =========================
+// MAIN
+// =========================
+function analyze(){
+
+  const addr = document.getElementById("token").value;
+
+  if(!addr){
+    document.getElementById("result").innerHTML = "⚠️ Enter token/wallet";
+    return;
+  }
+
+  const d = analyzeData(addr);
+
+  let status =
+    d.risk > 70 ? "🔴 HIGH RISK" :
+    d.risk > 40 ? "🟠 WATCH" :
+    "🟢 SAFE";
+
+  document.getElementById("result").innerHTML = `
+
+    <div class="grid">
+
+      <div class="box">
+        🪙 Token<br>
+        <b>${addr.slice(0,12)}...</b>
+      </div>
+
+      <div class="box">
+        💀 Risk Score<br>
+        <b>${d.risk}/100</b>
+      </div>
+
+      <div class="box">
+        👛 Holders<br>
+        <b>${d.holders}</b>
+      </div>
+
+      <div class="box">
+        📈 Volume<br>
+        <b>$${d.volume}</b>
+      </div>
+
+      <div class="box">
+        💧 Liquidity<br>
+        <b>$${d.liquidity}</b>
+      </div>
+
+      <div class="box">
+        🔁 Swaps Activity<br>
+        <b>${d.swaps}</b>
+      </div>
+
+      <div class="box">
+        🧠 Smart Money<br>
+        <b class="${d.smartMoney ? 'green':'red'}">
+          ${d.smartMoney ? 'DETECTED 🐋' : 'NO SIGNAL'}
+        </b>
+      </div>
+
+      <div class="box">
+        👨‍💻 Dev Activity<br>
+        <b class="${d.devActive ? 'green':'orange'}">
+          ${d.devActive ? 'ACTIVE' : 'LOW'}
+        </b>
+      </div>
+
+      <div class="box">
+        ⚡ Status<br>
+        <b>${status}</b>
+      </div>
+
+    </div>
+
+  `;
+}
+
+</script>
+
+</body>
+</html>
