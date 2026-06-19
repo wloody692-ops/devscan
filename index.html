@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Arena On-Chain Stream</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#020808;
+color:#eafff3;
+}
+
+.header{
+padding:14px;
+text-align:center;
+background:#071c14;
+border-bottom:1px solid #10b981;
+}
+
+h1{
+margin:0;
+color:#10b981;
+font-size:24px;
+}
+
+.live{
+color:red;
+margin-left:6px;
+animation:blink 1s infinite;
+}
+
+@keyframes blink{
+50%{opacity:0.3;}
+}
+
+.container{
+max-width:900px;
+margin:auto;
+padding:10px;
+}
+
+.stream{
+background:#0b2a1d;
+border-radius:12px;
+padding:12px;
+margin-top:10px;
+border:1px solid rgba(16,185,129,0.25);
+position:relative;
+overflow:hidden;
+}
+
+.row{
+display:flex;
+justify-content:space-between;
+align-items:center;
+}
+
+.name{font-size:13px;font-weight:bold;}
+.symbol{font-size:11px;opacity:0.7;}
+
+.bar{
+margin-top:10px;
+height:10px;
+background:rgba(255,255,255,0.12);
+border-radius:6px;
+overflow:hidden;
+display:flex;
+}
+
+.a{background:#10b981;height:100%;transition:0.3s;}
+.b{background:#3b82f6;height:100%;transition:0.3s;}
+
+.meta{
+margin-top:8px;
+font-size:11px;
+opacity:0.85;
+}
+
+/* whale alert */
+.whale{
+color:#00ff88;
+font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+CRYPTO ON-CHAIN STREAM <span class="live">● LIVE</span>
+</div>
+
+<div class="container" id="stream">Connecting to chain...</div>
+
+<script>
+
+/* ==============================
+   🔴 REAL DATA PLACEHOLDER LAYER
+   ============================== */
+
+/* لاحقًا هنا تحط:
+   - Helius WebSocket
+   - Solana RPC logs
+*/
+async function getPairs(){
+try{
+const r = await fetch("https://api.dexscreener.com/latest/dex/pairs/solana");
+const d = await r.json();
+return d?.pairs || [];
+}catch(e){
+return [];
+}
+}
+
+/* 🧠 market power engine */
+function power(p){
+let liq = p.liquidity?.usd || 0;
+let vol = p.volume?.h24 || 0;
+return vol / (liq + 1);
+}
+
+/* 🐋 real whale logic (placeholder for on-chain logs) */
+function detectWhale(p){
+
+let liq = p.liquidity?.usd || 0;
+let vol = p.volume?.h24 || 0;
+
+let spike = vol / (liq + 1);
+
+/* simulate whale condition */
+return spike > 2.2;
+}
+
+/* ⚔️ stream renderer */
+function render(pairs){
+
+let stream = document.getElementById("stream");
+stream.innerHTML = "";
+
+for(let i=0;i<6;i+=2){
+
+let a = pairs[i];
+let b = pairs[i+1];
+if(!a || !b) continue;
+
+let sa = power(a);
+let sb = power(b);
+
+let total = sa + sb;
+
+let pa = (sa/total)*100;
+let pb = 100-pa;
+
+let whaleA = detectWhale(a);
+let whaleB = detectWhale(b);
+
+stream.innerHTML += `
+<div class="stream">
+
+<div class="row">
+<div>
+<div class="name">
+${a.baseToken?.name}
+${whaleA ? " 🐋" : ""}
+</div>
+<div class="symbol">${a.baseToken?.symbol}</div>
+</div>
+
+<div>⚔️ LIVE</div>
+
+<div style="text-align:right">
+<div class="name">
+${b.baseToken?.name}
+${whaleB ? " 🐋" : ""}
+</div>
+<div class="symbol">${b.baseToken?.symbol}</div>
+</div>
+</div>
+
+<div class="bar">
+<div class="a" style="width:${pa}%"></div>
+<div class="b" style="width:${pb}%"></div>
+</div>
+
+<div class="meta">
+Power A: ${pa.toFixed(1)}% | Power B: ${pb.toFixed(1)}%
+${whaleA || whaleB ? "<div class='whale'>Whale activity detected ⚠️</div>" : ""}
+</div>
+
+</div>
+`;
+}
+
+}
+
+/* 🔁 live loop */
+async function loop(){
+let data = await getPairs();
+render(data);
+}
+
+loop();
+setInterval(loop, 4000);
+
+</script>
+
+</body>
+</html>
