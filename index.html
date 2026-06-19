@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan Stealth Pro</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#020b08,#000);
+color:#eafff3;
+overflow-x:hidden;
+}
+
+/* header */
+.header{
+padding:18px;
+text-align:center;
+border-bottom:1px solid #10b981;
+background:rgba(16,185,129,0.05);
+backdrop-filter: blur(8px);
+position:sticky;
+top:0;
+}
+
+.header h1{
+margin:0;
+font-size:32px;
+letter-spacing:2px;
+color:#10b981;
+text-transform:uppercase;
+}
+
+/* pulse dot */
+.dot{
+display:inline-block;
+width:8px;
+height:8px;
+border-radius:50%;
+background:#10b981;
+margin-left:6px;
+animation:pulse 1.2s infinite;
+}
+
+@keyframes pulse{
+0%{transform:scale(1);opacity:1;}
+50%{transform:scale(1.6);opacity:0.5;}
+100%{transform:scale(1);opacity:1;}
+}
+
+.container{
+max-width:950px;
+margin:auto;
+padding:12px;
+}
+
+/* card */
+.card{
+margin-top:12px;
+padding:14px;
+border-radius:12px;
+background:rgba(10,40,30,0.35);
+border:1px solid rgba(16,185,129,0.4);
+backdrop-filter: blur(10px);
+transition:0.2s;
+}
+
+.card:hover{
+transform:scale(1.01);
+border-color:#10b981;
+}
+
+/* status */
+.badge{
+padding:5px 10px;
+border-radius:6px;
+font-size:12px;
+font-weight:bold;
+}
+
+.green{color:#00ff88;}
+.orange{color:#ffb84d;}
+.red{color:#ff4d4d;}
+
+/* grid stats */
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:8px;
+margin-top:10px;
+font-size:13px;
+opacity:0.9;
+}
+
+/* glow button */
+.btn{
+display:inline-block;
+margin-top:10px;
+padding:8px 12px;
+border-radius:8px;
+background:#10b981;
+color:#000;
+font-weight:bold;
+text-decoration:none;
+font-size:13px;
+box-shadow:0 0 10px rgba(16,185,129,0.4);
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>DEVSCAN STEALTH PRO <span class="dot"></span></h1>
+</div>
+
+<div class="container">
+<div id="feed">Scanning stealth liquidity...</div>
+</div>
+
+<script>
+
+/* ================= FETCH ================= */
+async function getPairs(){
+try{
+const r = await fetch("https://api.dexscreener.com/latest/dex/pairs/solana");
+const d = await r.json();
+return d?.pairs || [];
+}catch(e){
+return [];
+}
+}
+
+/* ================= INTELLIGENCE SCORE ================= */
+function analyze(p){
+
+let liq = p.liquidity?.usd || 0;
+let vol = p.volume?.h24 || 0;
+let price = parseFloat(p.priceUsd || 0);
+
+let spike = vol / (liq + 1);
+
+let score = 30;
+
+/* momentum */
+if(vol > 300) score += 15;
+if(vol > liq * 0.5) score += 25;
+
+/* stealth whale detection */
+if(spike > 2.5) score += 25;
+else if(spike > 1.5) score += 15;
+
+/* liquidity zone */
+if(liq > 800 && liq < 120000) score += 10;
+
+/* label */
+let status = "STEALTH";
+
+if(score > 75) status = "WHALE ENTRY";
+else if(score > 60) status = "ACTIVE FLOW";
+
+/* entry zone */
+let range = price * (0.03 + spike / 60);
+
+return {
+score,
+status,
+liq,
+vol,
+price,
+spike,
+low: price - range,
+high: price + range
+};
+}
+
+/* ================= RENDER ================= */
+function render(pairs){
+
+let feed = document.getElementById("feed");
+feed.innerHTML = "";
+
+if(!pairs.length){
+feed.innerHTML = "No stealth signals detected...";
+return;
+}
+
+let list = pairs.map(p => ({...p, ...analyze(p)}));
+
+list.sort((a,b)=>b.score-a.score);
+
+list.slice(0,6).forEach(p=>{
+
+let color = "red";
+if(p.status === "WHALE ENTRY") color = "green";
+else if(p.status === "ACTIVE FLOW") color = "orange";
+
+let dex = p.pairAddress
+? `https://dexscreener.com/solana/${p.pairAddress}`
+: "#";
+
+feed.innerHTML += `
+<div class="card">
+
+<h3>${p.baseToken?.name || "Unknown Asset"}</h3>
+<div style="opacity:0.7">${p.baseToken?.symbol || ""}</div>
+
+<div class="grid">
+<div>💧 $${Math.round(p.liq)}</div>
+<div>📊 $${Math.round(p.vol)}</div>
+<div>⚡ ${p.spike.toFixed(2)}</div>
+</div>
+
+<p class="badge ${color}">
+${p.status} • Score ${p.score}
+</p>
+
+<p>Entry Zone:</p>
+<p><b>$${p.low.toFixed(8)} - $${p.high.toFixed(8)}</b></p>
+
+<a class="btn" target="_blank" href="${dex}">
+OPEN CHART
+</a>
+
+</div>
+`;
+});
+
+}
+
+/* ================= LOOP ================= */
+async function loop(){
+const data = await getPairs();
+render(data);
+}
+
+loop();
+setInterval(loop, 6000);
+
+</script>
+
+</body>
+</html>
