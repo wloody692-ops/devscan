@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>RUG LAB</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+margin:0;
+background:radial-gradient(circle at top,#02050a,#000);
+color:white;
+font-family:Arial;
+overflow:hidden;
+text-align:center;
+}
+
+.container{
+position:relative;
+top:12vh;
+}
+
+h1{
+text-shadow:0 0 20px #00ff99;
+letter-spacing:3px;
+}
+
+button{
+padding:15px 22px;
+margin:8px;
+border:none;
+border-radius:10px;
+font-weight:bold;
+cursor:pointer;
+transition:0.1s;
+}
+
+button:active{
+transform:scale(0.95);
+}
+
+.tap{background:#00ff99;}
+.share{background:#1da1f2;color:white;}
+
+.stat{
+font-size:18px;
+margin:8px;
+}
+
+.good{color:#00ff99}
+.mid{color:#ffaa00}
+.bad{color:#ff3b3b}
+
+.feed{
+margin-top:15px;
+padding:10px;
+width:320px;
+margin-left:auto;
+margin-right:auto;
+background:#0a0f18;
+border:1px solid #111;
+border-radius:10px;
+font-size:14px;
+text-align:left;
+}
+
+.glitch{
+animation:glitch 0.2s infinite;
+}
+
+@keyframes glitch{
+0%{transform:translate(0,0);}
+25%{transform:translate(2px,-2px);}
+50%{transform:translate(-2px,2px);}
+75%{transform:translate(2px,2px);}
+100%{transform:translate(0,0);}
+}
+</style>
+</head>
+
+<body>
+
+<div class="container" id="screen">
+
+<h1>💀 RUG LAB</h1>
+
+<div class="stat">Score: <span id="score">0</span></div>
+<div class="stat">Risk: <span id="risk">0%</span></div>
+<div class="stat">Status: <span id="status" class="good">STABLE</span></div>
+
+<button class="tap" onclick="tap()">TRADE</button>
+<button class="share" onclick="share()">SHARE ON X</button>
+
+<div class="feed" id="feed">loading market...</div>
+
+</div>
+
+<script>
+
+let score = 0;
+let risk = 0;
+
+let tokens = ["PEPEX","DOGEX","SOLRUG","MOONAI","DEVFLOP","RATCOIN"];
+
+function tap(){
+
+score += Math.floor(Math.random()*1000);
+risk = Math.floor(Math.random()*100);
+
+document.getElementById("score").innerText = score;
+document.getElementById("risk").innerText = risk + "%";
+
+let status = document.getElementById("status");
+let screen = document.getElementById("screen");
+
+if(risk > 75){
+
+status.innerText = "💀 FULL RUG";
+status.className = "bad";
+
+score = Math.floor(score * 0.5);
+
+screen.classList.add("glitch");
+
+setTimeout(()=>screen.classList.remove("glitch"),400);
+
+}
+else if(risk > 45){
+
+status.innerText = "📉 DANGER";
+status.className = "mid";
+
+}
+else{
+
+status.innerText = "🚀 PUMP MODE";
+status.className = "good";
+
+}
+
+updateFeed();
+}
+
+function updateFeed(){
+
+let feed = "";
+
+for(let i=0;i<4;i++){
+
+let t = tokens[Math.floor(Math.random()*tokens.length)];
+let v = Math.floor(Math.random()*5000);
+let ev = ["BUY WALL","DEV BUY","INSIDER DUMP","LIQ ADD","WHALING"][Math.floor(Math.random()*5)];
+
+feed += `${t} | ${ev} | vol:${v}<br>`;
+}
+
+document.getElementById("feed").innerHTML = feed;
+}
+
+function share(){
+
+let text = `💀 RUG LAB SURVIVAL
+
+Score: ${score}
+Risk: ${risk}%
+
+Can you survive the market?`;
+
+let url = "https://twitter.com/intent/tweet?text=" + encodeURIComponent(text);
+window.open(url,"_blank");
+}
+
+setInterval(()=>updateFeed(),3000);
+updateFeed();
+
+</script>
+
+</body>
+</html>
