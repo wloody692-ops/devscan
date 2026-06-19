@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#052e1b,#02120c);
+color:#eafff3;
+}
+
+.header{
+padding:18px;
+text-align:center;
+border-bottom:1px solid #10b981;
+background:rgba(16,185,129,0.08);
+}
+
+.header h1{
+margin:0;
+font-size:34px;
+font-weight:900;
+color:#10b981;
+}
+
+.twitterBtn{
+display:inline-block;
+margin-top:6px;
+padding:5px 10px;
+border-radius:6px;
+background:#000;
+color:#fff;
+font-size:12px;
+font-weight:bold;
+text-decoration:none;
+border:1px solid #10b981;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+padding:12px;
+}
+
+.card{
+margin-top:12px;
+padding:14px;
+border-radius:14px;
+border:1px solid #10b981;
+background:rgba(6,45,29,0.9);
+}
+
+.badge{
+padding:6px 10px;
+border-radius:6px;
+font-weight:bold;
+font-size:12px;
+}
+
+.green{color:#00ff88;}
+.orange{color:#ffb84d;}
+.red{color:#ff3b3b;}
+
+.dexBtn{
+display:inline-block;
+margin-top:10px;
+padding:10px 14px;
+border-radius:10px;
+background:#10b981;
+color:#000;
+font-weight:bold;
+text-decoration:none;
+font-size:14px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>DevScan</h1>
+
+<a class="twitterBtn" href="https://twitter.com/devscan1" target="_blank">
+Twitter
+</a>
+
+</div>
+
+<div class="container">
+<div id="feed">Loading live market...</div>
+</div>
+
+<script>
+
+/* ================= SAFE FETCH (NO EMPTY) ================= */
+async function getPairs(){
+try{
+
+let urls = [
+"https://api.dexscreener.com/latest/dex/search?q=solana",
+"https://api.dexscreener.com/latest/dex/search?q=pump",
+"https://api.dexscreener.com/latest/dex/search?q=token"
+];
+
+for(let url of urls){
+try{
+let r = await fetch(url);
+let d = await r.json();
+
+if(d?.pairs?.length > 0){
+return d.pairs;
+}
+}catch(e){}
+}
+
+/* fallback fake-safe (prevents empty screen) */
+return [];
+
+}catch(e){
+return [];
+}
+}
+
+/* ================= ANALYZE ================= */
+function analyze(p){
+
+let liq = p.liquidity?.usd || 0;
+let vol = p.volume?.h24 || 0;
+let price = parseFloat(p.priceUsd || 0);
+let mc = p.fdv || 0;
+
+let spike = vol / (liq + 1);
+
+/* score */
+let score = 40;
+
+/* activity */
+if(vol > 300) score += 20;
+if(vol > liq * 0.4) score += 25;
+
+/* whale pressure */
+if(spike > 1.5) score += 25;
+if(spike > 2.5) score += 10;
+
+/* liquidity healthy zone */
+if(liq >= 2000 && liq <= 300000) score += 10;
+
+/* label */
+let label = "🟡 BUILDING";
+
+if(score >= 80) label = "🐋 HOT FLOW";
+else if(score >= 60) label = "🟠 ACTIVE";
+
+/* entry zone */
+let range = price * (0.03 + spike / 60);
+
+return {
+score,
+label,
+liq,
+vol,
+mc,
+price,
+low: price - range,
+high: price + range
+};
+}
+
+/* ================= RENDER (ALWAYS SHOW) ================= */
+function render(pairs){
+
+let feed = document.getElementById("feed");
+feed.innerHTML = "";
+
+/* safety fallback if API empty */
+if(!pairs || pairs.length === 0){
+feed.innerHTML = "🔄 Waiting for live tokens... (market loading)";
+return;
+}
+
+let list = pairs.map(p => {
+let a = analyze(p);
+return {...p, ...a};
+});
+
+/* strongest first */
+list.sort((a,b)=>b.score-a.score);
+
+/* ALWAYS SHOW TOP 5 */
+let top = list.slice(0,5);
+
+top.forEach(p=>{
+
+let color = "red";
+if(p.label.includes("HOT")) color = "green";
+else if(p.label.includes("ACTIVE")) color = "orange";
+
+let dex = p.pairAddress
+? `https://dexscreener.com/solana/${p.pairAddress}`
+: "#";
+
+feed.innerHTML += `
+<div class="card">
+
+<h3>${p.baseToken?.symbol || "UNKNOWN"}</h3>
+
+<p>💰 Market Cap: $${Math.round(p.mc || 0)}</p>
+<p>💧 Liquidity: $${Math.round(p.liq)}</p>
+<p>📊 Volume: $${Math.round(p.vol)}</p>
+
+<hr>
+
+<p class="badge ${color}">
+${p.label} • Score ${p.score}
+</p>
+
+<p>📊 Entry Zone</p>
+<p><b>$${p.low.toFixed(8)} - $${p.high.toFixed(8)}</b></p>
+
+<a class="dexBtn" href="${dex}" target="_blank">
+Open DexScreener
+</a>
+
+</div>
+`;
+});
+
+}
+
+/* ================= LOOP ================= */
+async function loop(){
+const p = await getPairs();
+render(p);
+}
+
+loop();
+setInterval(loop, 6000);
+
+</script>
+
+</body>
+</html>
