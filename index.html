@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan PRO Stable</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#052e1b,#02120c);
+color:#eafff3;
+min-height:100vh;
+overflow:auto;
+}
+
+.header{
+padding:14px;
+text-align:center;
+background:rgba(16,185,129,0.08);
+border-bottom:1px solid #10b981;
+}
+
+.header h1{
+margin:0;
+color:#10b981;
+font-size:26px;
+font-weight:900;
+}
+
+.header a{
+display:flex;
+justify-content:center;
+align-items:center;
+gap:6px;
+color:#000;
+text-decoration:none;
+font-size:11px;
+margin-top:5px;
+}
+
+.container{
+padding:12px;
+max-width:900px;
+margin:auto;
+}
+
+.searchBox{
+display:flex;
+gap:10px;
+margin-top:10px;
+}
+
+input{
+flex:1;
+padding:12px;
+border-radius:10px;
+border:1px solid #10b981;
+background:#062d1d;
+color:white;
+outline:none;
+}
+
+button{
+padding:12px 16px;
+border:none;
+border-radius:10px;
+background:#10b981;
+color:black;
+font-weight:bold;
+cursor:pointer;
+}
+
+.card{
+margin-top:15px;
+padding:15px;
+border-radius:14px;
+border:1px solid #10b981;
+background:rgba(6,45,29,0.9);
+}
+
+.badge{
+display:inline-block;
+padding:5px 10px;
+border-radius:6px;
+font-size:12px;
+font-weight:bold;
+background:#10b981;
+color:black;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+  <h1>👮 DevScan</h1>
+
+  <a href="https://twitter.com/devscan1" target="_blank">
+    <span style="font-size:14px;">𝕏</span>
+    @devscan1
+  </a>
+</div>
+
+<div class="container">
+
+<div class="searchBox">
+<input id="token" placeholder="Paste token address">
+<button onclick="scan()">Analyze</button>
+</div>
+
+<div id="result"></div>
+
+</div>
+
+<script>
+
+const HELIUS_KEY = "1f3e9d07-b2ef-4448-9b62-6938069c82dd";
+
+async function getMintAuthority(mint){
+try{
+const r = await fetch(`https://api.helius.xyz/v0/mints/${mint}?api-key=${HELIUS_KEY}`);
+const d = await r.json();
+return d?.mintAuthority || null;
+}catch(e){
+return null;
+}
+}
+
+async function getStableCreator(mint){
+try{
+const r = await fetch(`https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${HELIUS_KEY}&limit=100`);
+const d = await r.json();
+
+let freq = {};
+
+d?.forEach(tx=>{
+if(tx.feePayer){
+freq[tx.feePayer] = (freq[tx.feePayer] || 0) + 2;
+if(tx.blockTime) freq[tx.feePayer] += 1;
+}
+});
+
+let sorted = Object.entries(freq)
+.sort((a,b)=>b[1]-a[1]);
+
+return sorted?.[0]?.[0] || null;
+
+}catch(e){
+return null;
+}
+}
+
+function whaleStats(volume, liquidity){
+
+let ratio = volume / (liquidity + 1);
+let percent = Math.min(100, ratio * 25);
+
+let label = "NO WHALES";
+
+if(percent > 70) label = "🐋 STRONG WHALES";
+else if(percent > 40) label = "🐋 MID WHALES";
+else if(percent > 15) label = "🟡 LOW WHALES";
+
+return {percent:Math.round(percent), label};
+}
+
+function rugChance(liquidity, volume, whalePercent){
+
+let risk = 35;
+
+if(liquidity < 3000) risk += 30;
+if(volume > liquidity * 4) risk += 25;
+if(whalePercent > 60) risk += 15;
+if(liquidity > 20000) risk -= 20;
+
+return Math.min(100, Math.max(0, risk));
+}
+
+function resolveDev(mintAuth, stableCreator){
+
+if(mintAuth && mintAuth !== "11111111111111111111111111111111"){
+return {
+wallet: mintAuth,
+type: "Mint Authority (REAL)"
+};
+}
+
+if(stableCreator){
+return {
+wallet: stableCreator,
+type: "Early Active Wallet (LIKELY DEV)"
+};
+}
+
+return {
+wallet: "Unknown",
+type: "Unverified"
+};
+}
+
+async function scan(){
+
+const token=document.getElementById("token").value.trim();
+const result=document.getElementById("result");
+
+if(!token){
+result.innerHTML="❌ اكتب التوكن";
+return;
+}
+
+result.innerHTML="🧠 Stable + Whale Analysis...";
+
+try{
+
+const r=await fetch("https://api.dexscreener.com/latest/dex/tokens/"+token);
+const data=await r.json();
+
+if(!data.pairs){
+result.innerHTML="❌ No data";
+return;
+}
+
+const p=data.pairs[0];
+
+const liquidity=p.liquidity?.usd||0;
+const volume=p.volume?.h24||0;
+
+let score=50;
+
+if(liquidity > 20000) score += 20;
+else if(liquidity < 3000) score -= 25;
+
+if(volume > 100000) score += 15;
+else if(volume < 1000) score -= 10;
+
+let mintAuth = await getMintAuthority(token);
+let stableCreator = await getStableCreator(token);
+
+let devInfo = resolveDev(mintAuth, stableCreator);
+
+let whale = whaleStats(volume, liquidity);
+
+let rug = rugChance(liquidity, volume, whale.percent);
+
+let status="🟢 SAFE";
+if(score < 40 || rug > 70) status="🔴 HIGH RISK";
+else if(score < 70) status="🟡 MID";
+
+result.innerHTML=`
+<div class="card">
+
+<h2>${p.baseToken.name} (${p.baseToken.symbol})</h2>
+
+<p>💧 Liquidity: $${Math.round(liquidity)}</p>
+<p>📊 Volume: $${Math.round(volume)}</p>
+
+<hr>
+
+<h2>Score: ${Math.round(score)}/100</h2>
+<span class="badge">${status}</span>
+
+<hr>
+
+<h3>🧬 Dev Intelligence</h3>
+<p style="word-break:break-all">${devInfo.wallet}</p>
+<p>${devInfo.type}</p>
+
+<hr>
+
+<h3>🐋 Whale Activity</h3>
+<p>${whale.label}</p>
+<p>Strength: ${whale.percent}%</p>
+
+<h3>💀 Rug Probability</h3>
+<p>${rug}%</p>
+
+</div>
+`;
+
+}catch(e){
+result.innerHTML="❌ Error";
+}
+
+}
+
+</script>
+
+</body>
+</html>
