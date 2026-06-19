@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#052e1b,#02120c);
+color:#eafff3;
+}
+
+.header{
+padding:18px;
+text-align:center;
+border-bottom:1px solid #10b981;
+background:rgba(16,185,129,0.08);
+}
+
+.header h1{
+margin:0;
+font-size:34px;
+font-weight:900;
+color:#10b981;
+}
+
+.header a{
+display:block;
+margin-top:6px;
+color:#10b981;
+font-weight:bold;
+text-decoration:none;
+}
+
+.container{
+max-width:900px;
+margin:auto;
+padding:12px;
+}
+
+.card{
+margin-top:12px;
+padding:14px;
+border-radius:14px;
+border:1px solid #10b981;
+background:rgba(6,45,29,0.9);
+}
+
+.badge{
+padding:6px 10px;
+border-radius:6px;
+font-weight:bold;
+font-size:12px;
+}
+
+.green{color:#00ff88;}
+.orange{color:#ffb84d;}
+.red{color:#ff3b3b;}
+
+a.link{
+display:inline-block;
+margin-top:8px;
+color:#10b981;
+font-weight:bold;
+text-decoration:none;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>DEVSCAN</h1>
+
+<a href="https://twitter.com/devscan1" target="_blank">
+Twitter @devscan1
+</a>
+</div>
+
+<div class="container">
+<div id="feed">Loading...</div>
+</div>
+
+<script>
+
+/* FETCH */
+async function getPairs(){
+try{
+const r=await fetch("https://api.dexscreener.com/latest/dex/search?q=solana");
+const data=await r.json();
+return data.pairs || [];
+}catch{
+return [];
+}
+}
+
+/* DEV SELL */
+function devSell(liq,vol){
+
+let p=(vol/(liq+1))*100;
+
+let status="HOLDING";
+if(p>80) status="DUMPING";
+else if(p>50) status="PARTIAL SELL";
+
+return {status,p:Math.min(100,Math.round(p))};
+}
+
+/* ENTRY ZONES */
+function entry(price,liq,vol){
+
+let strength=(vol/(liq+1))*40;
+
+let low=price*(1-(0.02+strength/200));
+let high=price*(1+(0.02+strength/200));
+
+let type="NO ENTRY";
+if(strength>30) type="STRONG ENTRY";
+else if(strength>15) type="MID ENTRY";
+
+return {low,high,type};
+}
+
+/* SCORE */
+function score(p){
+
+let liq=p.liquidity?.usd||0;
+let vol=p.volume?.h24||0;
+let price=parseFloat(p.priceUsd||0);
+
+let s=50;
+
+if(liq>2000 && liq<50000) s+=20;
+if(vol>5000) s+=20;
+
+let r=vol/(liq+1);
+if(r>1) s+=20;
+
+return {s,liq,vol,price};
+}
+
+/* RENDER */
+function render(pairs){
+
+let feed=document.getElementById("feed");
+feed.innerHTML="";
+
+let list=pairs.map(p=>{
+
+let base=score(p);
+let dev=devSell(base.liq,base.vol);
+let en=entry(base.price,base.liq,base.vol);
+
+return {...p,...base,dev,en};
+});
+
+list.sort((a,b)=>b.s-a.s);
+
+list.slice(0,5).forEach(p=>{
+
+let color="red";
+if(p.en.type.includes("STRONG")) color="green";
+else if(p.en.type.includes("MID")) color="orange";
+
+let dex=p.pairAddress
+? `https://dexscreener.com/solana/${p.pairAddress}`
+: "#";
+
+feed.innerHTML+=`
+<div class="card">
+
+<h3>${p.baseToken?.symbol}</h3>
+
+<p>Liquidity: $${Math.round(p.liq)}</p>
+<p>Volume: $${Math.round(p.vol)}</p>
+
+<hr>
+
+<p class="badge ${color}">${p.en.type}</p>
+
+<p>Entry Zone</p>
+<p><b>$${p.en.low.toFixed(8)} - $${p.en.high.toFixed(8)}</b></p>
+
+<hr>
+
+<p>Dev: <b>${p.dev.status}</b> (${p.dev.p}%)</p>
+
+<a class="link" href="${dex}" target="_blank">Open Dex</a>
+
+</div>
+`;
+});
+
+}
+
+async function loop(){
+const p=await getPairs();
+render(p);
+}
+
+loop();
+setInterval(loop,10000);
+
+</script>
+
+</body>
+</html>
