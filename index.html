@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>RUG DOG: Neon Escape</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+body{
+margin:0;
+overflow:hidden;
+background:black;
+font-family:Arial;
+color:white;
+text-align:center;
+}
+
+canvas{position:absolute;top:0;left:0;}
+
+#menu{
+position:absolute;
+width:100%;
+height:100%;
+display:flex;
+flex-direction:column;
+justify-content:center;
+align-items:center;
+background:radial-gradient(circle,#0b1220,#000);
+z-index:20;
+}
+
+h1{
+font-size:28px;
+text-shadow:0 0 25px #00ff99;
+letter-spacing:2px;
+}
+
+button{
+padding:12px 18px;
+margin:6px;
+border:none;
+border-radius:10px;
+font-weight:bold;
+cursor:pointer;
+}
+
+.start{background:#00ff99;}
+.share{background:#1da1f2;color:white;}
+.retry{background:#ff3b3b;color:white;}
+
+.panel{
+position:absolute;
+top:10px;
+left:10px;
+z-index:10;
+background:rgba(0,0,0,0.35);
+padding:10px;
+border-radius:10px;
+font-size:13px;
+}
+
+.hidden{display:none;}
+</style>
+</head>
+
+<body>
+
+<div id="menu">
+<h1>🐶💀 RUG DOG: Neon Escape</h1>
+<p>Survive the neon chaos</p>
+<button class="start" onclick="startGame()">START RUN</button>
+</div>
+
+<canvas id="c"></canvas>
+
+<div class="panel">
+<div>Score: <span id="score">0</span></div>
+<div>Level: <span id="level">1</span></div>
+<div>Combo: <span id="combo">0</span></div>
+
+<button class="share" onclick="share()">SHARE</button>
+<button class="retry" onclick="reset()">RESTART</button>
+
+<div id="msg">Dodge the chaos</div>
+</div>
+
+<script>
+
+const c=document.getElementById("c");
+const ctx=c.getContext("2d");
+
+c.width=innerWidth;
+c.height=innerHeight;
+
+// PLAYER
+let dog={x:c.width/2,y:c.height-120,r:18,shake:0};
+
+// STATE
+let enemies=[];
+let particles=[];
+let score=0;
+let level=1;
+let combo=0;
+let running=false;
+let bg=0;
+let wave=1;
+
+// SOUND
+function beep(f){
+let a=new AudioContext();
+let o=a.createOscillator();
+o.frequency.value=f;
+o.connect(a.destination);
+o.start();
+o.stop(a.currentTime+0.05);
+}
+
+// INPUT
+document.addEventListener("mousemove",e=>dog.x=e.clientX);
+document.addEventListener("touchmove",e=>dog.x=e.touches[0].clientX);
+
+// START
+function startGame(){
+document.getElementById("menu").style.display="none";
+running=true;
+spawnWave();
+loop();
+}
+
+// RESET
+function reset(){
+location.reload();
+}
+
+// PARTICLES
+function boom(x,y){
+for(let i=0;i<12;i++){
+particles.push({
+x,y,
+vx:(Math.random()-0.5)*6,
+vy:(Math.random()-0.5)*6,
+life:30
+});
+}
+dog.shake=10;
+}
+
+// WAVES (core upgrade)
+function spawnWave(){
+
+if(!running) return;
+
+for(let i=0;i<wave+2;i++){
+enemies.push({
+x:Math.random()*c.width,
+y:-Math.random()*300
+});
+}
+
+wave++;
+setTimeout(spawnWave,4000 - level*120);
+}
+
+// LOOP
+function loop(){
+
+if(!running) return;
+
+ctx.clearRect(0,0,c.width,c.height);
+
+// 🌌 NEON CITY BACKGROUND
+bg+=2;
+ctx.fillStyle="#05060a";
+ctx.fillRect(0,0,c.width,c.height);
+
+ctx.strokeStyle="rgba(0,255,153,0.1)";
+for(let i=0;i<15;i++){
+ctx.beginPath();
+ctx.moveTo(0,(i*80+bg)%c.height);
+ctx.lineTo(c.width,(i*80+bg)%c.height);
+ctx.stroke();
+}
+
+// DOG SHAKE
+let sx=(Math.random()-0.5)*dog.shake;
+let sy=(Math.random()-0.5)*dog.shake;
+dog.shake*=0.85;
+
+// 🐶 DOG
+ctx.fillStyle="#00ff99";
+ctx.beginPath();
+ctx.arc(dog.x+sx,dog.y+sy,dog.r,0,Math.PI*2);
+ctx.fill();
+
+// eyes
+ctx.fillStyle="black";
+ctx.fillRect(dog.x-5,dog.y-4,3,3);
+ctx.fillRect(dog.x+2,dog.y-4,3,3);
+
+// ENEMIES
+for(let e of enemies){
+e.y+=2+level*0.5;
+
+ctx.fillStyle="#ff3b3b";
+ctx.fillRect(e.x,e.y,18,18);
+
+let d=Math.hypot(dog.x-e.x,dog.y-e.y);
+
+if(d<22){
+score=Math.max(0,score-30);
+combo=0;
+boom(dog.x,dog.y);
+beep(120);
+document.getElementById("msg").innerText="💀 HIT!";
+}
+
+if(e.y>c.height){
+score+=10;
+combo++;
+beep(300);
+
+if(combo%5===0){
+level++;
+beep(600);
+document.getElementById("msg").innerText="⚡ LEVEL UP!";
+}
+}
+}
+
+// PARTICLES
+for(let p of particles){
+p.x+=p.vx;
+p.y+=p.vy;
+p.life--;
+
+ctx.fillStyle="white";
+ctx.fillRect(p.x,p.y,2,2);
+}
+
+particles=particles.filter(p=>p.life>0);
+
+// UI
+score++;
+document.getElementById("score").innerText=score;
+document.getElementById("level").innerText=level;
+document.getElementById("combo").innerText=combo;
+
+requestAnimationFrame(loop);
+}
+
+// SHARE
+function share(){
+let text=`🐶💀 RUG DOG: Neon Escape
+
+Score: ${score}
+Level: ${level}
+Combo: ${combo}
+
+Can you survive the neon chaos?`;
+
+window.open("https://twitter.com/intent/tweet?text="+encodeURIComponent(text));
+}
+
+</script>
+
+</body>
+</html>
