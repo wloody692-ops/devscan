@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEON CITY GTA CORE</title>
+
+<style>
+body{margin:0;overflow:hidden;background:#000;font-family:Arial}
+
+/* UI */
+#ui{
+position:fixed;top:10px;left:10px;
+color:#00ffcc;
+background:rgba(0,0,0,0.6);
+padding:10px;border-radius:10px;
+display:none;
+z-index:10;
+}
+
+/* STORE */
+#store{
+position:fixed;width:100%;height:100%;
+display:flex;flex-direction:column;
+align-items:center;justify-content:center;
+background:radial-gradient(circle,#001a2a,#000);
+color:white;
+z-index:50;
+}
+
+#title{
+font-size:32px;
+color:#00ffcc;
+text-shadow:0 0 20px #00ffcc;
+}
+
+button{
+padding:15px 40px;
+margin-top:15px;
+background:#00ffcc;
+border:none;
+border-radius:12px;
+font-size:18px;
+font-weight:bold;
+}
+
+/* CONTROLS */
+#controls{
+position:fixed;
+bottom:20px;
+left:50%;
+transform:translateX(-50%);
+display:none;
+gap:10px;
+z-index:10;
+}
+
+.btn{
+width:60px;height:60px;
+background:rgba(0,255,204,0.15);
+border:2px solid #00ffcc;
+border-radius:12px;
+color:#00ffcc;
+display:flex;
+align-items:center;
+justify-content:center;
+}
+
+/* ACTION BUTTON */
+#action{
+position:fixed;
+right:20px;
+bottom:120px;
+width:80px;height:80px;
+border-radius:50%;
+border:2px solid #00ffcc;
+color:#00ffcc;
+background:rgba(0,0,0,0.3);
+display:none;
+z-index:10;
+}
+</style>
+</head>
+
+<body>
+
+<div id="store">
+<div id="title">🕴🏻 NEON CITY GTA CORE</div>
+<p>Drive • Enter Cars • Missions</p>
+<button id="play">PLAY</button>
+</div>
+
+<div id="ui">
+🪙 Coins: <span id="coins">0</span><br>
+🚗 Mode: <span id="mode">Walking</span><br>
+🎯 Mission: <span id="mission">0/10</span>
+</div>
+
+<div id="controls">
+<div class="btn" id="left">⬅️</div>
+<div class="btn" id="up">⬆️</div>
+<div class="btn" id="down">⬇️</div>
+<div class="btn" id="right">➡️</div>
+</div>
+
+<div id="action">🚗</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
+
+<script>
+
+let scene,camera,renderer;
+let player,car;
+let coins=[];
+let move={x:0,z:0};
+
+let coinsCount=0;
+let mission=0;
+let inCar=false;
+let started=false;
+
+// 🚀 INIT
+function init(){
+
+scene=new THREE.Scene();
+scene.background=new THREE.Color(0x05060a);
+scene.fog=new THREE.Fog(0x05060a,30,160);
+
+camera=new THREE.PerspectiveCamera(75,innerWidth/innerHeight,0.1,1000);
+camera.position.set(0,8,14);
+
+renderer=new THREE.WebGLRenderer({antialias:true});
+renderer.setSize(innerWidth,innerHeight);
+document.body.appendChild(renderer.domElement);
+
+// 💡 LIGHTS
+scene.add(new THREE.AmbientLight(0xffffff,1.1));
+
+const light=new THREE.PointLight(0x00ffcc,2,200);
+light.position.set(10,20,10);
+scene.add(light);
+
+// 🌆 CITY
+for(let i=0;i<100;i++){
+const h=2+Math.random()*12;
+
+const b=new THREE.Mesh(
+new THREE.BoxGeometry(2,h,2),
+new THREE.MeshStandardMaterial({
+color:0x1b2a3a,
+emissive:0x00ffcc,
+emissiveIntensity:0.05
+})
+);
+
+b.position.set((Math.random()-0.5)*220,h/2,(Math.random()-0.5)*220);
+scene.add(b);
+}
+
+// 🧍 PLAYER
+player=new THREE.Mesh(
+new THREE.BoxGeometry(1,1,1),
+new THREE.MeshStandardMaterial({color:0x00ffcc})
+);
+player.position.y=0.5;
+scene.add(player);
+
+// 🚗 CAR
+car=new THREE.Mesh(
+new THREE.BoxGeometry(1.2,0.6,2.2),
+new THREE.MeshStandardMaterial({color:0xff0044})
+);
+car.position.set(6,0.3,6);
+scene.add(car);
+
+// 🪙 COINS
+for(let i=0;i<50;i++){
+const c=new THREE.Mesh(
+new THREE.SphereGeometry(0.3),
+new THREE.MeshStandardMaterial({color:0xffff00})
+);
+
+c.position.set((Math.random()-0.5)*180,0.5,(Math.random()-0.5)*180);
+scene.add(c);
+coins.push(c);
+}
+
+// INPUT
+bindControls();
+animate();
+}
+
+// 🎮 CONTROLS
+function bindControls(){
+
+function bind(id,x,z){
+const el=document.getElementById(id);
+
+el.addEventListener("touchstart",()=>{move.x=x;move.z=z});
+el.addEventListener("touchend",()=>{move.x=0;move.z=0});
+el.addEventListener("mousedown",()=>{move.x=x;move.z=z});
+el.addEventListener("mouseup",()=>{move.x=0;move.z=0});
+}
+
+bind("left",-1,0);
+bind("right",1,0);
+bind("up",0,-1);
+bind("down",0,1);
+
+// 🚗 ENTER / EXIT CAR
+document.getElementById("action").onclick=()=>{
+
+if(!inCar){
+if(player.position.distanceTo(car.position)<3){
+inCar=true;
+document.getElementById("mode").innerText="Driving";
+}
+}else{
+inCar=false;
+player.position.copy(car.position);
+document.getElementById("mode").innerText="Walking";
+}
+};
+}
+
+// 🎮 LOOP
+function animate(){
+requestAnimationFrame(animate);
+if(!started) return;
+
+let speed=inCar?0.45:0.25;
+
+// MOVEMENT
+if(inCar){
+car.position.x+=move.x*speed;
+car.position.z+=move.z*speed;
+camera.position.x=car.position.x;
+camera.position.z=car.position.z+14;
+camera.lookAt(car.position);
+}else{
+player.position.x+=move.x*speed;
+player.position.z+=move.z*speed;
+camera.position.x=player.position.x;
+camera.position.z=player.position.z+14;
+camera.lookAt(player.position);
+}
+
+// 🪙 COINS
+coins.forEach(c=>{
+if(c.visible && c.position.distanceTo(player.position)<1){
+c.visible=false;
+coinsCount++;
+document.getElementById("coins").innerText=coinsCount;
+
+// 🎯 mission
+if(coinsCount>=10){
+mission=10;
+document.getElementById("mission").innerText="10/10 Completed";
+}
+}
+});
+
+renderer.render(scene,camera);
+}
+
+// ▶ START
+document.getElementById("play").onclick=()=>{
+document.getElementById("store").style.display="none";
+document.getElementById("ui").style.display="block";
+document.getElementById("controls").style.display="flex";
+document.getElementById("action").style.display="block";
+
+started=true;
+init();
+};
+
+// RESIZE
+window.addEventListener("resize",()=>{
+if(camera){
+camera.aspect=innerWidth/innerHeight;
+camera.updateProjectionMatrix();
+}
+if(renderer){
+renderer.setSize(innerWidth,innerHeight);
+}
+});
+
+</script>
+
+</body>
+</html>
