@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crypto Heatmap</title>
+
+<style>
+body{
+margin:0;
+font-family:Arial;
+background:#050a08;
+color:#eafff3;
+}
+
+.header{
+padding:16px;
+text-align:center;
+background:#071c14;
+border-bottom:1px solid #10b981;
+}
+
+h1{
+margin:0;
+color:#10b981;
+font-size:26px;
+font-weight:900;
+}
+
+.grid{
+display:grid;
+grid-template-columns:repeat(3,1fr);
+gap:10px;
+padding:10px;
+max-width:1000px;
+margin:auto;
+}
+
+.box{
+padding:14px;
+border-radius:10px;
+text-align:center;
+border:1px solid rgba(255,255,255,0.1);
+transition:0.2s;
+}
+
+.box:hover{
+transform:scale(1.05);
+}
+
+/* heat levels */
+.low{background:#062019;}
+.mid{background:#1a4d2e;}
+.high{background:#10b981;color:black;}
+.risk{background:#ff3b3b;color:white;}
+
+.name{
+font-size:14px;
+font-weight:bold;
+}
+
+.symbol{
+font-size:11px;
+opacity:0.8;
+margin-top:3px;
+}
+
+.small{
+font-size:11px;
+opacity:0.85;
+margin-top:6px;
+}
+
+.bar{
+margin-top:6px;
+height:6px;
+border-radius:5px;
+background:rgba(255,255,255,0.2);
+overflow:hidden;
+}
+
+.fill{
+height:100%;
+background:#00ff88;
+}
+</style>
+</head>
+
+<body>
+
+<div class="header">
+<h1>CRYPTO HEATMAP</h1>
+</div>
+
+<div class="grid" id="grid">Loading market...</div>
+
+<script>
+
+async function getPairs(){
+try{
+const r = await fetch("https://api.dexscreener.com/latest/dex/pairs/solana");
+const d = await r.json();
+return d?.pairs || [];
+}catch(e){
+return [];
+}
+}
+
+/* heat + pressure */
+function calc(p){
+
+let liq = p.liquidity?.usd || 0;
+let vol = p.volume?.h24 || 0;
+
+let ratio = vol / (liq + 1);
+let pressure = Math.min(100, ratio * 35);
+
+let level = "low";
+
+if(pressure > 70) level = "high";
+else if(pressure > 40) level = "mid";
+else if(liq < 800) level = "risk";
+
+return {pressure, level};
+}
+
+function render(pairs){
+
+let grid = document.getElementById("grid");
+grid.innerHTML = "";
+
+pairs.slice(0,9).forEach(p=>{
+
+let {pressure, level} = calc(p);
+
+grid.innerHTML += `
+<div class="box ${level}">
+
+<div class="name">
+${p.baseToken?.name || "Unknown"}
+</div>
+
+<div class="symbol">
+${p.baseToken?.symbol || "?"}
+</div>
+
+<div class="bar">
+<div class="fill" style="width:${pressure}%"></div>
+</div>
+
+<div class="small">
+Pressure: ${pressure.toFixed(0)}%
+</div>
+
+</div>
+`;
+});
+
+}
+
+async function loop(){
+let data = await getPairs();
+render(data);
+}
+
+loop();
+setInterval(loop, 6000);
+
+</script>
+
+</body>
+</html>
