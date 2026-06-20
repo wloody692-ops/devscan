@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WolfRun</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{
+  background:#0d1b0f;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  min-height:100vh;
+  font-family:'Inter',sans-serif;
+  overflow:hidden;
+}
+
+#gameWrap{position:relative;display:flex;flex-direction:column;align-items:center;}
+
+#topBar{
+  display:flex;gap:10px;align-items:center;width:100%;
+  margin-bottom:6px;
+}
+.stat{
+  background:#ffffff10;
+  border:1px solid #ffffff22;
+  border-radius:16px;
+  padding:5px 12px;
+  color:#d4edda;
+}
+.stat b{color:#a8e063;}
+
+canvas{
+  border:2px solid #2d5a1b;
+  border-radius:10px;
+}
+
+/* TOUCH CONTROLS */
+#touchControls{
+  position:fixed;
+  bottom:18px;
+  left:50%;
+  transform:translateX(-50%);
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  z-index:999;
+}
+
+#touchControls .row{
+  display:flex;
+  gap:10px;
+  justify-content:center;
+}
+
+#touchControls button{
+  width:58px;
+  height:58px;
+  border-radius:14px;
+  border:1px solid #ffffff22;
+  background:#ffffff10;
+  color:#fff;
+  font-size:20px;
+  backdrop-filter:blur(6px);
+}
+
+#touchControls button:active{
+  background:#56ab2f66;
+  transform:scale(0.92);
+}
+
+#overlay{
+  position:absolute;
+  inset:0;
+  background:#000000aa;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.panel{
+  background:#123;
+  padding:20px;
+  border-radius:16px;
+  color:white;
+  text-align:center;
+}
+.btn{
+  margin-top:10px;
+  padding:10px 20px;
+  border:none;
+  border-radius:20px;
+  background:#56ab2f;
+  color:white;
+}
+</style>
+</head>
+
+<body>
+
+<div id="gameWrap">
+
+  <div id="topBar">
+    <div class="stat">❤️ <b id="livesEl">3</b></div>
+    <div class="stat">⭐ <b id="scoreEl">0</b></div>
+    <div class="stat">⏱ <b id="timerEl">90</b></div>
+  </div>
+
+  <canvas id="c"></canvas>
+
+  <div id="overlay">
+    <div class="panel">
+      <h2>🐺 WolfRun</h2>
+      <input id="nameInput" placeholder="Your name">
+      <button class="btn" onclick="startGame()">Start</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- TOUCH -->
+<div id="touchControls">
+  <div class="row">
+    <button ontouchstart="touch('up')">⬆️</button>
+  </div>
+  <div class="row">
+    <button ontouchstart="touch('left')">⬅️</button>
+    <button ontouchstart="touch('down')">⬇️</button>
+    <button ontouchstart="touch('right')">➡️</button>
+  </div>
+</div>
+
+<script>
+// ===== BASIC SETUP =====
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+canvas.width=800;
+canvas.height=500;
+
+const TILE=32;
+const COLS=25;
+const ROWS=15;
+
+// PLAYER
+let player={x:5,y:5};
+let dir={x:0,y:0};
+let score=0,lives=3,timer=90;
+let game=true;
+
+// INPUT
+let keys={};
+
+document.addEventListener('keydown',e=>{
+  keys[e.key]=true;
+});
+
+document.addEventListener('keyup',e=>{
+  keys[e.key]=false;
+});
+
+// TOUCH CONTROL
+function touch(d){
+  if(d==='left') dir={x:-1,y:0};
+  if(d==='right') dir={x:1,y:0};
+  if(d==='up') dir={x:0,y:-1};
+  if(d==='down') dir={x:0,y:1};
+}
+
+// GAME LOOP
+function loop(){
+  if(!game) return;
+
+  if(keys['ArrowLeft']||keys['a']) dir={x:-1,y:0};
+  if(keys['ArrowRight']||keys['d']) dir={x:1,y:0};
+  if(keys['ArrowUp']||keys['w']) dir={x:0,y:-1};
+  if(keys['ArrowDown']||keys['s']) dir={x:0,y:1};
+
+  player.x+=dir.x*0.1;
+  player.y+=dir.y*0.1;
+
+  draw();
+
+  requestAnimationFrame(loop);
+}
+
+// DRAW
+function draw(){
+  ctx.fillStyle="#1b3b1a";
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  ctx.fillStyle="white";
+  ctx.fillRect(player.x*TILE,player.y*TILE,TILE,TILE);
+}
+
+// START
+function startGame(){
+  document.getElementById('overlay').style.display='none';
+  loop();
+}
+</script>
+
+</body>
+</html>
