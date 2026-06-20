@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forest Adventure</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@600;800&family=Inter:wght@400;600&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;}
+
+body{
+background:#0d1b0f;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+min-height:100vh;
+font-family:'Inter',sans-serif;
+overflow:hidden;
+user-select:none;
+}
+
+#gameWrap{
+position:relative;
+display:flex;
+flex-direction:column;
+align-items:center;
+gap:6px;
+}
+
+#topBar{
+display:flex;
+gap:12px;
+align-items:center;
+width:100%;
+}
+
+#topBar .stat{
+background:#ffffff0f;
+border:1px solid #ffffff18;
+border-radius:20px;
+padding:5px 16px;
+color:#d4edda;
+font-size:.88rem;
+display:flex;
+align-items:center;
+gap:6px;
+}
+
+#topBar .stat b{color:#a8e063;}
+
+canvas{
+border:2px solid #2d5a1b;
+border-radius:10px;
+box-shadow:0 0 60px #1a4a0a88;
+display:block;
+}
+
+/* ===== JOYSTICK (ADDED ONLY) ===== */
+#joystick{
+position:fixed;
+bottom:25px;
+left:25px;
+width:120px;
+height:120px;
+z-index:999;
+}
+
+#joyBase{
+width:120px;
+height:120px;
+border-radius:50%;
+background:rgba(255,255,255,0.08);
+border:1px solid rgba(255,255,255,0.15);
+backdrop-filter:blur(6px);
+}
+
+#joyStick{
+position:absolute;
+top:50%;
+left:50%;
+width:55px;
+height:55px;
+border-radius:50%;
+transform:translate(-50%,-50%);
+background:linear-gradient(135deg,#56ab2f,#a8e063);
+box-shadow:0 0 20px #56ab2f55;
+}
+
+#overlay{
+position:absolute;
+top:0;
+left:0;
+right:0;
+bottom:0;
+background:linear-gradient(160deg,#0a1f0a99,#0d1b0fbb);
+display:flex;
+align-items:center;
+justify-content:center;
+z-index:20;
+border-radius:10px;
+}
+
+.panel{
+background:linear-gradient(160deg,#12321288,#1b4332cc);
+border:1.5px solid #56ab2f55;
+border-radius:18px;
+padding:36px 44px;
+text-align:center;
+color:#fff;
+}
+
+.btn{
+background:linear-gradient(135deg,#27ae60,#56ab2f);
+color:#fff;
+border:none;
+border-radius:24px;
+padding:11px 36px;
+cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div id="gameWrap">
+
+  <div id="topBar">
+    <div class="stat">❤️ <b id="livesEl">3</b></div>
+    <div class="stat">⭐ <b id="scoreEl">0</b></div>
+    <div class="stat">⏱ <b id="timerEl">90</b></div>
+  </div>
+
+  <canvas id="c"></canvas>
+
+  <div id="overlay">
+    <div class="panel">
+      <h2>🐺 WolfRun</h2>
+      <input id="nameInput" placeholder="Enter name">
+      <button class="btn" onclick="startGame()">Start</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- JOYSTICK -->
+<div id="joystick">
+  <div id="joyBase"></div>
+  <div id="joyStick"></div>
+</div>
+
+<script>
+// ===== CANVAS =====
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+canvas.width=800;
+canvas.height=500;
+
+const TILE=32;
+
+// PLAYER
+let player={x:5,y:5};
+let dir={x:0,y:0};
+let keys={};
+
+// ===== JOYSTICK SYSTEM (ADDED ONLY) =====
+let joyActive=false;
+let joyCenter={x:0,y:0};
+let joyDir={x:0,y:0};
+
+const joy=document.getElementById("joystick");
+const stick=document.getElementById("joyStick");
+
+joy.addEventListener("touchstart",(e)=>{
+joyActive=true;
+const r=joy.getBoundingClientRect();
+joyCenter.x=r.left+r.width/2;
+joyCenter.y=r.top+r.height/2;
+});
+
+joy.addEventListener("touchmove",(e)=>{
+if(!joyActive) return;
+
+const t=e.touches[0];
+let dx=t.clientX-joyCenter.x;
+let dy=t.clientY-joyCenter.y;
+
+const max=40;
+const dist=Math.hypot(dx,dy);
+
+if(dist>max){
+dx=dx/dist*max;
+dy=dy/dist*max;
+}
+
+stick.style.transform=`translate(${dx}px,${dy}px)`;
+
+const nx=dx/max;
+const ny=dy/max;
+
+joyDir.x=Math.abs(nx)>0.3?Math.sign(nx):0;
+joyDir.y=Math.abs(ny)>0.3?Math.sign(ny):0;
+
+e.preventDefault();
+});
+
+joy.addEventListener("touchend",()=>{
+joyActive=false;
+joyDir={x:0,y:0};
+stick.style.transform="translate(-50%,-50%)";
+});
+
+// ===== GAME =====
+function startGame(){
+document.getElementById('overlay').style.display='none';
+loop();
+}
+
+function loop(){
+
+// keyboard
+if(keys['ArrowLeft']||keys['a']) dir={x:-1,y:0};
+if(keys['ArrowRight']||keys['d']) dir={x:1,y:0};
+if(keys['ArrowUp']||keys['w']) dir={x:0,y:-1};
+if(keys['ArrowDown']||keys['s']) dir={x:0,y:1};
+
+// joystick override
+if(joyDir.x!==0||joyDir.y!==0){
+dir={...joyDir};
+}
+
+player.x+=dir.x*0.08;
+player.y+=dir.y*0.08;
+
+draw();
+requestAnimationFrame(loop);
+}
+
+function draw(){
+ctx.fillStyle="#1b3b1a";
+ctx.fillRect(0,0,canvas.width,canvas.height);
+
+ctx.fillStyle="white";
+ctx.fillRect(player.x*TILE,player.y*TILE,TILE,TILE);
+}
+</script>
+
+</body>
+</html>
