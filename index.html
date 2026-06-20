@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>City Open World</title>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#0a0a0f;overflow:hidden;font-family:'Rajdhani',sans-serif;}
+canvas{display:block;background:#000;}
+</style>
+</head>
+
+<body>
+
+<canvas id="c"></canvas>
+
+<script>
+// =====================
+// CANVAS FIX
+// =====================
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+
+const VW=800,VH=580;
+canvas.width=VW;
+canvas.height=VH;
+
+// =====================
+// WORLD
+// =====================
+const TILE=24;
+const WORLD_W=80,WORLD_H=80;
+
+const world=[];
+
+for(let y=0;y<WORLD_H;y++){
+  world[y]=[];
+  for(let x=0;x<WORLD_W;x++){
+    world[y][x]=0;
+  }
+}
+
+// =====================
+// PLAYER
+// =====================
+let player={
+  x:10*TILE,y:10*TILE,
+  hp:100
+};
+
+// =====================
+// NPCS
+// =====================
+const npcs=[];
+
+for(let i=0;i<10;i++){
+  npcs.push({
+    x:(20+Math.random()*40)*TILE,
+    y:(20+Math.random()*40)*TILE,
+    hp:30,
+    aggressive:Math.random()<0.7,
+    shootCooldown:0
+  });
+}
+
+// =====================
+// BULLETS
+// =====================
+const bullets=[];
+
+// =====================
+// INPUT
+// =====================
+const keys={};
+
+document.addEventListener('keydown',e=>keys[e.key]=true);
+document.addEventListener('keyup',e=>keys[e.key]=false);
+
+// =====================
+// PLAYER SHOOT
+// =====================
+canvas.addEventListener('click',(e)=>{
+  const dx=e.clientX-player.x;
+  const dy=e.clientY-player.y;
+  const len=Math.sqrt(dx*dx+dy*dy);
+
+  bullets.push({
+    x:player.x,
+    y:player.y,
+    vx:(dx/len)*8,
+    vy:(dy/len)*8,
+    life:60,
+    fromPlayer:true
+  });
+});
+
+// =====================
+// UPDATE
+// =====================
+function update(){
+
+  // MOVE PLAYER
+  if(keys['w']) player.y-=3;
+  if(keys['s']) player.y+=3;
+  if(keys['a']) player.x-=3;
+  if(keys['d']) player.x+=3;
+
+  // NPC AI
+  for(let npc of npcs){
+
+    const dx=player.x-npc.x;
+    const dy=player.y-npc.y;
+    const dist=Math.sqrt(dx*dx+dy*dy);
+
+    if(npc.shootCooldown>0) npc.shootCooldown--;
+
+    if(npc.aggressive && dist<250){
+
+      npc.x+=dx/dist*1.2;
+      npc.y+=dy/dist*1.2;
+
+      if(dist<200 && npc.shootCooldown===0){
+        npc.shootCooldown=50;
+
+        bullets.push({
+          x:npc.x,
+          y:npc.y,
+          vx:(dx/dist)*5,
+          vy:(dy/dist)*5,
+          life:80,
+          fromNPC:true
+        });
+      }
+    }
+  }
+
+  // BULLETS
+  for(let i=bullets.length-1;i>=0;i--){
+    let b=bullets[i];
+
+    b.x+=b.vx;
+    b.y+=b.vy;
+    b.life--;
+
+    // HIT NPC
+    if(b.fromPlayer){
+      for(let npc of npcs){
+        const dx=npc.x-b.x;
+        const dy=npc.y-b.y;
+
+        if(Math.sqrt(dx*dx+dy*dy)<10){
+          npc.hp-=10;
+          b.life=0;
+
+          if(npc.hp<=0){
+            npcs.splice(npcs.indexOf(npc),1);
+          }
+        }
+      }
+    }
+
+    // HIT PLAYER
+    if(b.fromNPC){
+      const dx=player.x-b.x;
+      const dy=player.y-b.y;
+
+      if(Math.sqrt(dx*dx+dy*dy)<10){
+        player.hp-=10;
+        b.life=0;
+
+        if(player.hp<=0){
+          player.hp=100;
+          player.x=10*TILE;
+          player.y=10*TILE;
+        }
+      }
+    }
+
+    if(b.life<=0) bullets.splice(i,1);
+  }
+}
+
+// =====================
+// DRAW
+// =====================
+function draw(){
+  ctx.clearRect(0,0,VW,VH);
+
+  // PLAYER
+  ctx.fillStyle="lime";
+  ctx.fillRect(player.x-5,player.y-5,10,10);
+
+  // NPCS
+  for(let npc of npcs){
+    ctx.fillStyle=npc.aggressive?"red":"blue";
+    ctx.fillRect(npc.x-5,npc.y-5,10,10);
+  }
+
+  // BULLETS
+  for(let b of bullets){
+    ctx.fillStyle=b.fromNPC?"red":"lime";
+    ctx.beginPath();
+    ctx.arc(b.x,b.y,3,0,Math.PI*2);
+    ctx.fill();
+  }
+}
+
+// =====================
+// LOOP
+// =====================
+function loop(){
+  update();
+  draw();
+  requestAnimationFrame(loop);
+}
+
+loop();
+</script>
+
+</body>
+</html>
