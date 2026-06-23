@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan PRO Stable</title>
+<style>
+body{margin:0;font-family:Arial;background:radial-gradient(circle at top,#052e1b,#02120c);color:#eafff3;min-height:100vh;overflow:auto;}
+.header{padding:14px;text-align:center;background:rgba(16,185,129,0.08);border-bottom:1px solid #10b981;}
+.header h1{margin:0;font-size:34px;font-weight:900;letter-spacing:1px;color:#10b981;}
+.header a{display:flex;justify-content:center;margin-top:6px;text-decoration:none;}
+.container{padding:12px;max-width:900px;margin:auto;}
+.searchBox{display:flex;gap:10px;margin-top:10px;}
+input{flex:1;padding:12px;border-radius:10px;border:1px solid #10b981;background:#062d1d;color:white;outline:none;}
+button{padding:12px 16px;border:none;border-radius:10px;background:#10b981;color:black;font-weight:bold;cursor:pointer;}
+.card{margin-top:15px;padding:15px;border-radius:14px;border:1px solid #10b981;background:rgba(6,45,29,0.9);}
+.badge{display:inline-block;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:bold;background:#10b981;color:black;}
+.history-item{padding:8px 10px;border-radius:8px;margin-top:6px;font-size:13px;border-left:3px solid #10b981;background:rgba(16,185,129,0.07);}
+.history-dead{border-left-color:#f87171;background:rgba(248,113,113,0.07);}
+.history-alive{border-left-color:#34d399;background:rgba(52,211,153,0.07);}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DevScan</h1>
+  <a href="https://twitter.com/devscan1" target="_blank">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="black">
+      <path d="M18.244 2H21.5l-7.4 8.44L22 22h-6.9l-5.4-6.4L3.7 22H.5l7.9-9.02L2 2h7l4.9 5.8L18.244 2zm-1.2 18h1.9L6.1 4H4.1l12.944 16z"/>
+    </svg>
+  </a>
+</div>
+
+<div class="container">
+  <div class="searchBox">
+    <input id="token" placeholder="Paste token address">
+    <button onclick="scan()">Analyze</button>
+  </div>
+  <div id="result"></div>
+</div>
+
+<script>
+
+const HELIUS_KEY = "1f3e9d07-b2ef-4448-9b62-6938069c82dd";
+
+const IGNORE = new Set([
+  "11111111111111111111111111111111",
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJe1bh",
+  "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s",
+  "SysvarRent111111111111111111111111111111111",
+  "ComputeBudget111111111111111111111111111111",
+  "So11111111111111111111111111111111111111112"
+]);
+
+async function getMintAuthority(mint){
+  try{
+    const r = await fetch(`https://api.helius.xyz/v0/mints/${mint}?api-key=${HELIUS_KEY}`);
+    const d = await r.json();
+    const auth = d?.mintAuthority;
+    if(auth && !IGNORE.has(auth)) return auth;
+    return null;
+  }catch(e){ return null; }
+}
+
+async function getRealDev(mint){
+  try{
+    const r = await fetch(
+      `https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${HELIUS_KEY}&limit=25`
+    );
+    const txs = await r.json();
+    if(!txs || !Array.isArray(txs) || txs.length === 0) return null;
+
+    const sorted = [...txs].sort((a,b) =>
+      (a.timestamp||a.blockTime||0) - (b.timestamp||b.blockTime||0)
+    );
+
+    for(let tx of sorted){
+      const fp = tx.feePayer;
+      if(fp && !IGNORE.has(fp) && fp !== mint){
+        return { wallet: fp, source: "Fee Payer (Oldest TX)" };
+      }
+    }
+    return null;
+  }catch(e){ return null; }
+}
+
+async function getDevHistory(devWallet, currentMint){
+  try{
+    const r = await fetch(
+      `https://api.helius.xyz/v0/addresses/${devWallet}/transactions?api-key=${HELIUS_KEY}&limit=50`
+    );
+    const txs = await r.json();
+    if(!txs || !Array.isArray(txs)) return [];
+
+    let mints = new Set();
+    txs.forEach(tx => {
+      if(tx.feePayer === devWallet && tx.tokenTransfers){
+        tx.tokenTransfers.forEach(t => {
+          if(t.mint && t.mint !== currentMint && !IGNORE.has(t.mint)){
+            mints.add(t.mint);
+          }
+        });
+      }
+    });
+
+    // آخر 3 = نعكس الترتيب (الأحدث أولاً)
+    const toCheck = [...mints].reverse().slice(0, 3);
+
+    const results = await Promise.allSettled(
+      toCheck.map(mint =>
+        fetch("https://api.dexscreener.com/latest/dex/tokens/" + mint)
+          .then(r => r.json())
+      )
+    );
+
+    let history = [];
+    results.forEach(res => {
+      if(res.status === "fulfilled"){
+        const dd = res.value;
+        if(dd.pairs && dd.pairs.length > 0){
+          const pair = dd.pairs[0];
+          const liq = pair.liquidity?.usd || 0;
+          history.push({
+            name: pair.baseToken.name || "Unknown",
+            symbol: pair.baseToken.symbol || "?",
+            liquidity: liq,
+            alive: liq > 1000
+          });
+        }
+      }
+    });
+
+    return history;
+  }catch(e){ return []; }
+}
+
+function resolveDev(mintAuth, realDev){
+  if(mintAuth){
+    return { wallet: mintAuth, type: "Mint Authority (CONFIRMED DEV)" };
+  }
+  if(realDev){
+    return { wallet: realDev.wallet, type: `Early Dev Wallet (${realDev.source})` };
+  }
+  return { wallet: "Unknown", type: "Unverified" };
+}
+
+function whaleStats(volume, liquidity){
+  let ratio = volume / (liquidity + 1);
+  let percent = Math.min(100, ratio * 25);
+  let label = "NO WHALES";
+  if(percent > 70) label = "🐋 STRONG WHALES";
+  else if(percent > 40) label = "🐋 MID WHALES";
+  else if(percent > 15) label = "🟡 LOW WHALES";
+  return {percent:Math.round(percent), label};
+}
+
+function rugChance(liquidity, volume, whalePercent){
+  let risk = 35;
+  if(liquidity < 3000) risk += 30;
+  if(volume > liquidity * 4) risk += 25;
+  if(whalePercent > 60) risk += 15;
+  if(liquidity > 20000) risk -= 20;
+  return Math.min(100, Math.max(0, risk));
+}
+
+function buildHistoryHTML(history){
+  if(!history || history.length === 0){
+    return `<p style="color:#6ee7b7;font-size:13px">No previous tokens found — first project or unknown dev</p>`;
+  }
+  const dead = history.filter(h => !h.alive).length;
+  const alive = history.filter(h => h.alive).length;
+  const total = history.length;
+  const verdict = dead === total
+    ? `🔴 All previous tokens rugged — HIGH RISK`
+    : dead > alive
+    ? `🟡 Most tokens rugged (${dead}/${total})`
+    : `🟢 Has surviving tokens (${alive}/${total})`;
+
+  let items = history.map(h => `
+    <div class="history-item ${h.alive ? 'history-alive' : 'history-dead'}">
+      ${h.alive ? '🟢' : '🔴'} <strong>${h.name} (${h.symbol})</strong>
+      — Liquidity: $${Math.round(h.liquidity).toLocaleString()}
+      ${h.alive ? '✅ Alive' : '💀 Dead'}
+    </div>
+  `).join('');
+
+  return `<p style="margin-bottom:6px"><strong>${verdict}</strong></p>${items}`;
+}
+
+async function scan(){
+  const token = document.getElementById("token").value.trim();
+  const result = document.getElementById("result");
+
+  if(!token){
+    result.innerHTML = "❌ Enter token address";
+    return;
+  }
+
+  result.innerHTML = "🧠 Analyzing token...";
+
+  try{
+    const [dexRes, mintAuth, realDev] = await Promise.all([
+      fetch("https://api.dexscreener.com/latest/dex/tokens/" + token).then(r => r.json()),
+      getMintAuthority(token),
+      getRealDev(token)
+    ]);
+
+    if(!dexRes.pairs){
+      result.innerHTML = "❌ No data found for this token";
+      return;
+    }
+
+    const p = dexRes.pairs[0];
+    const liquidity = p.liquidity?.usd || 0;
+    const volume = p.volume?.h24 || 0;
+
+    let score = 50;
+    if(liquidity > 20000) score += 20;
+    else if(liquidity < 3000) score -= 25;
+    if(volume > 100000) score += 15;
+    else if(volume < 1000) score -= 10;
+
+    const devInfo = resolveDev(mintAuth, realDev);
+
+    result.innerHTML = "📜 Fetching dev history...";
+
+    let history = [];
+    if(devInfo.wallet !== "Unknown"){
+      history = await getDevHistory(devInfo.wallet, token);
+      const dead = history.filter(h => !h.alive).length;
+      const total = history.length;
+      if(total > 0){
+        const deadRatio = dead / total;
+        if(deadRatio === 1) score -= 25;
+        else if(deadRatio > 0.6) score -= 15;
+        else if(deadRatio < 0.3) score += 10;
+      }
+    }
+
+    const whale = whaleStats(volume, liquidity);
+    const rug = rugChance(liquidity, volume, whale.percent);
+
+    let status = "🟢 SAFE";
+    if(score < 40 || rug > 70) status = "🔴 HIGH RISK";
+    else if(score < 70) status = "🟡 MID";
+
+    result.innerHTML = `
+<div class="card">
+<h2>${p.baseToken.name} (${p.baseToken.symbol})</h2>
+<p>💧 Liquidity: $${Math.round(liquidity).toLocaleString()}</p>
+<p>📊 Volume: $${Math.round(volume).toLocaleString()}</p>
+<hr>
+<h2>Score: ${Math.round(score)}/100</h2>
+<span class="badge">${status}</span>
+<hr>
+<h3>🧬 Dev Intelligence</h3>
+<p style="word-break:break-all">${devInfo.wallet}</p>
+<p>${devInfo.type}</p>
+<hr>
+<h3>📜 Dev History (Last 3 Tokens)</h3>
+${buildHistoryHTML(history)}
+<hr>
+<h3>🐋 Whale Activity</h3>
+<p>${whale.label}</p>
+<p>Strength: ${whale.percent}%</p>
+<h3>💀 Rug Probability</h3>
+<p>${rug}%</p>
+</div>`;
+
+  }catch(e){
+    result.innerHTML = "❌ Error: " + e.message;
+  }
+}
+
+</script>
+</body>
+</html>
