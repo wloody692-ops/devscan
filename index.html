@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevScan PRO</title>
+<style>
+body{
+margin:0;
+font-family:Arial;
+background: radial-gradient(circle at top,#052e1b,#02120c);
+color:#eafff3;
+min-height:100vh;
+overflow:auto;
+}
+.header{
+padding:14px;
+text-align:center;
+background:rgba(16,185,129,0.08);
+border-bottom:1px solid #10b981;
+}
+.header h1{
+margin:0;
+font-size:34px;
+font-weight:900;
+letter-spacing:1px;
+color:#10b981;
+}
+.header a{
+display:flex;
+justify-content:center;
+margin-top:6px;
+text-decoration:none;
+}
+.container{
+padding:12px;
+max-width:900px;
+margin:auto;
+}
+.searchBox{
+display:flex;
+gap:10px;
+margin-top:10px;
+}
+input{
+flex:1;
+padding:12px;
+border-radius:10px;
+border:1px solid #10b981;
+background:#062d1d;
+color:white;
+outline:none;
+}
+button{
+padding:12px 16px;
+border:none;
+border-radius:10px;
+background:#10b981;
+color:black;
+font-weight:bold;
+cursor:pointer;
+}
+.card{
+margin-top:15px;
+padding:15px;
+border-radius:14px;
+border:1px solid #10b981;
+background:rgba(6,45,29,0.9);
+}
+.badge{
+display:inline-block;
+padding:5px 10px;
+border-radius:6px;
+font-size:12px;
+font-weight:bold;
+background:#10b981;
+color:black;
+}
+.dev-box{
+background:rgba(16,185,129,0.1);
+border:1px solid #10b981;
+border-radius:10px;
+padding:12px;
+margin-top:8px;
+word-break:break-all;
+}
+.confidence{
+font-size:12px;
+color:#6ee7b7;
+margin-top:4px;
+}
+a.wallet-link{
+color:#10b981;
+text-decoration:none;
+font-size:12px;
+}
+a.wallet-link:hover{
+text-decoration:underline;
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>DevScan</h1>
+  <a href="https://twitter.com/devscan1" target="_blank">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="black">
+      <path d="M18.244 2H21.5l-7.4 8.44L22 22h-6.9l-5.4-6.4L3.7 22H.5l7.9-9.02L2 2h7l4.9 5.8L18.244 2zm-1.2 18h1.9L6.1 4H4.1l12.944 16z"/>
+    </svg>
+  </a>
+</div>
+
+<div class="container">
+  <div class="searchBox">
+    <input id="token" placeholder="Paste token address">
+    <button onclick="scan()">Analyze</button>
+  </div>
+  <div id="result"></div>
+</div>
+
+<script>
+
+const HELIUS_KEY = "1f3e9d07-b2ef-4448-9b62-6938069c82dd";
+
+// 1. Mint Authority - الأكيد
+async function getMintAuthority(mint){
+  try{
+    const r = await fetch(`https://api.helius.xyz/v0/mints/${mint}?api-key=${HELIUS_KEY}`);
+    const d = await r.json();
+    return d?.mintAuthority || null;
+  }catch(e){
+    return null;
+  }
+}
+
+// 2. الديف الحقيقي من أول معاملة (initialize mint)
+async function getRealDev(mint){
+  try{
+    // نجيب آخر 100 معاملة ونرتبها من الأقدم
+    const r = await fetch(
+      `https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${HELIUS_KEY}&limit=100`
+    );
+    const txs = await r.json();
+
+    if(!txs || !Array.isArray(txs) || txs.length === 0) return null;
+
+    // نرتب من الأقدم للأحدث
+    const sorted = [...txs].sort((a,b) => (a.timestamp||a.blockTime||0) - (b.timestamp||b.blockTime||0));
+
+    // أقدم معاملة = الديف الأصلي الي عمل الـ mint
+    const oldest = sorted[0];
+
+    // نحاول نجيب الـ signer الأول (مش feePayer بس)
+    if(oldest.accountData && oldest.accountData.length > 0){
+      // أول account في accountData عادةً هو الـ signer
+      const signerAccount = oldest.accountData[0]?.account;
+      if(signerAccount && signerAccount !== mint) return { wallet: signerAccount, source: "First Signer (Init TX)" };
+    }
+
+    // fallback: feePayer من أقدم tx
+    if(oldest.feePayer) return { wallet: oldest.feePayer, source: "Fee Payer (Oldest TX)" };
+
+    return null;
+  }catch(e){
+    return null;
+  }
+}
+
+// 3. تحقق إضافي - كم مرة ظهرت المحفظة في أول 10 معاملات
+async function verifyDev(mint, candidateWallet){
+  try{
+    const r = await fetch(
+      `https://api.helius.xyz/v0/addresses/${mint}/transactions?api-key=${HELIUS_KEY}&limit=10`
+    );
+    const txs = await r.json();
+    if(!txs || !Array.isArray(txs)) return 0;
+
+    const sorted = [...txs].sort((a,b) => (a.timestamp||a.blockTime||0) - (b.timestamp||b.blockTime||0));
+    let count = 0;
+    sorted.slice(0,5).forEach(tx => {
+      if(tx.feePayer === candidateWallet) count++;
+      if(tx.accountData?.some(a => a.account === candidateWallet)) count++;
+    });
+    return Math.min(100, count * 20);
+  }catch(e){
+    return 0;
+  }
+}
+
+function whaleStats(volume, liquidity){
+  let ratio = volume / (liquidity + 1);
+  let percent = Math.min(100, ratio * 25);
+  let label = "NO WHALES";
+  if(percent > 70) label = "🐋 STRONG WHALES";
+  else if(percent > 40) label = "🐋 MID WHALES";
+  else if(percent > 15) label = "🟡 LOW WHALES";
+  return {percent:Math.round(percent), label};
+}
+
+function rugChance(liquidity, volume, whalePercent){
+  let risk = 35;
+  if(liquidity < 3000) risk += 30;
+  if(volume > liquidity * 4) risk += 25;
+  if(whalePercent > 60) risk += 15;
+  if(liquidity > 20000) risk -= 20;
+  return Math.min(100, Math.max(0, risk));
+}
+
+async function scan(){
+
+  const token = document.getElementById("token").value.trim();
+  const result = document.getElementById("result");
+
+  if(!token){
+    result.innerHTML = "❌ اكتب التوكن";
+    return;
+  }
+
+  result.innerHTML = "🧠 جاري تحليل التوكن والبحث عن الديف...";
+
+  try{
+
+    const r = await fetch("https://api.dexscreener.com/latest/dex/tokens/" + token);
+    const data = await r.json();
+
+    if(!data.pairs){
+      result.innerHTML = "❌ No data";
+      return;
+    }
+
+    const p = data.pairs[0];
+    const liquidity = p.liquidity?.usd || 0;
+    const volume = p.volume?.h24 || 0;
+
+    let score = 50;
+    if(liquidity > 20000) score += 20;
+    else if(liquidity < 3000) score -= 25;
+    if(volume > 100000) score += 15;
+    else if(volume < 1000) score -= 10;
+
+    result.innerHTML = "🔍 جاري البحث عن محفظة الديف...";
+
+    // --- Dev Detection ---
+    const mintAuth = await getMintAuthority(token);
+    const realDev = await getRealDev(token);
+
+    let devWallet = "Unknown";
+    let devType = "❓ Unverified";
+    let confidence = 0;
+    let confidenceLabel = "";
+
+    // الأولوية: Mint Authority إذا موجود وليس system program
+    if(mintAuth && mintAuth !== "11111111111111111111111111111111"){
+      devWallet = mintAuth;
+      devType = "🔑 Mint Authority (CONFIRMED DEV)";
+      confidence = 100;
+      confidenceLabel = "✅ 100% - Mint Authority محقق";
+    }
+    // ثاني خيار: أول signer في أقدم معاملة
+    else if(realDev){
+      devWallet = realDev.wallet;
+      devType = `🕵️ ${realDev.source}`;
+      // نتحقق من الـ confidence
+      const verifyScore = await verifyDev(token, realDev.wallet);
+      confidence = Math.max(50, verifyScore);
+      confidenceLabel = confidence >= 80
+        ? `✅ ${confidence}% - على الأغلب الديف الحقيقي`
+        : confidence >= 50
+        ? `🟡 ${confidence}% - محتمل أن يكون الديف`
+        : `🔴 ${confidence}% - غير مؤكد`;
+    } else {
+      devWallet = "لم يتم العثور عليه";
+      devType = "❓ تعذر تحديد الديف";
+      confidenceLabel = "🔴 0% - لا يوجد بيانات كافية";
+    }
+
+    const whale = whaleStats(volume, liquidity);
+    const rug = rugChance(liquidity, volume, whale.percent);
+
+    let status = "🟢 SAFE";
+    if(score < 40 || rug > 70) status = "🔴 HIGH RISK";
+    else if(score < 70) status = "🟡 MID";
+
+    const solscanLink = devWallet !== "Unknown" && devWallet !== "لم يتم العثور عليه"
+      ? `<a class="wallet-link" href="https://solscan.io/account/${devWallet}" target="_blank">🔗 فتح في Solscan</a>`
+      : "";
+
+    result.innerHTML = `
+<div class="card">
+
+  <h2>${p.baseToken.name} (${p.baseToken.symbol})</h2>
+  <p>💧 Liquidity: $${Math.round(liquidity).toLocaleString()}</p>
+  <p>📊 Volume 24h: $${Math.round(volume).toLocaleString()}</p>
+
+  <hr>
+
+  <h2>Score: ${Math.round(score)}/100</h2>
+  <span class="badge">${status}</span>
+
+  <hr>
+
+  <h3>🧬 محفظة الديف</h3>
+  <div class="dev-box">
+    <strong>${devType}</strong><br><br>
+    <code style="font-size:13px">${devWallet}</code><br><br>
+    ${solscanLink}
+    <p class="confidence">${confidenceLabel}</p>
+  </div>
+
+  <hr>
+
+  <h3>🐋 Whale Activity</h3>
+  <p>${whale.label}</p>
+  <p>Strength: ${whale.percent}%</p>
+
+  <h3>💀 Rug Probability</h3>
+  <p style="color:${rug>70?'#f87171':rug>40?'#fbbf24':'#34d399'}">${rug}%</p>
+
+</div>
+`;
+
+  }catch(e){
+    result.innerHTML = "❌ Error: " + e.message;
+  }
+}
+
+</script>
+</body>
+</html>
