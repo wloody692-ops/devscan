@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>EUR/USD 1M Signal</title>
+<style>
+body{
+margin:0;
+background:#070b14;
+color:white;
+font-family:Arial,sans-serif;
+}
+.container{
+max-width:600px;
+margin:auto;
+padding:15px;
+}
+.card{
+background:#11192a;
+border:1px solid #293653;
+border-radius:18px;
+padding:18px;
+margin-bottom:15px;
+}
+h1{
+text-align:center;
+margin:5px;
+}
+.sub{
+text-align:center;
+color:#8d9ab2;
+font-size:13px;
+}
+.signal{
+margin-top:18px;
+padding:30px 10px;
+background:#09111f;
+border-radius:16px;
+text-align:center;
+}
+.signalText{
+font-size:40px;
+font-weight:900;
+}
+.buy{
+color:#32e58b;
+}
+.sell{
+color:#ff596d;
+}
+.wait{
+color:#ffd166;
+}
+.reason{
+margin-top:10px;
+color:#aeb9cc;
+font-size:13px;
+line-height:1.6;
+}
+.grid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:10px;
+margin-top:15px;
+}
+.metric{
+background:#182238;
+padding:12px;
+border-radius:11px;
+text-align:center;
+}
+.metric span{
+display:block;
+color:#8996af;
+font-size:12px;
+}
+.metric strong{
+display:block;
+margin-top:5px;
+font-size:17px;
+}
+button{
+width:100%;
+padding:14px;
+margin-top:18px;
+border:0;
+border-radius:11px;
+background:#2364ff;
+color:white;
+font-size:16px;
+font-weight:bold;
+}
+.status{
+text-align:center;
+color:#8d9ab2;
+font-size:12px;
+margin-top:12px;
+}
+.history{
+max-height:300px;
+overflow:auto;
+}
+.item{
+display:flex;
+justify-content:space-between;
+padding:10px 3px;
+border-bottom:1px solid #293653;
+font-size:12px;
+}
+.note{
+color:#78859d;
+font-size:11px;
+line-height:1.7;
+}
+</style>
+</head>
+<body>
+<div class="container">
+<div class="card">
+<h1>EUR/USD — 1 دقيقة</h1>
+<div class="sub">
+EMA 9/26 + RSI 7 + اتجاه 5M
+</div>
+<div class="signal">
+<div id="signal"
+class="signalText wait">
+⏳ انتظار
+</div>
+<div id="reason" class="reason">
+جاري تحميل البيانات...
+</div>
+</div>
+<div class="grid">
+<div class="metric">
+<span>السعر</span>
+<strong id="price">-</strong>
+</div>
+<div class="metric">
+<span>RSI 7</span>
+<strong id="rsi">-</strong>
+</div>
+<div class="metric">
+<span>EMA 9</span>
+<strong id="ema9">-</strong>
+</div>
+<div class="metric">
+<span>EMA 26</span>
+<strong id="ema26">-</strong>
+</div>
+<div class="metric">
+<span>اتجاه 5M</span>
+<strong id="trend">-</strong>
+</div>
+<div class="metric">
+<span>آخر شمعة</span>
+<strong id="time">-</strong>
+</div>
+</div>
+<button onclick="loadData()">
+🔄 تحليل الآن
+</button>
+<div id="status" class="status">
+جاري الاتصال...
+</div>
+</div>
+<div class="card">
+<h3>📊 سجل الإشارات</h3>
+<div id="history" class="history"></div>
+</div>
+<div class="card">
+<div class="note">
+هذه الصفحة تحليلية فقط ولا تنفذ الصفقات تلقائيًا.
+الإشارة على فريم الدقيقة.
+اتجاه 5 دقائق يستخدم كفلتر.
+بيانات EUR/USD من Twelve Data وقد تختلف عن سعر ExpertOption.
+</div>
+</div>
+</div>
+<script>
+/* =================================
+   Twelve Data API
+================================= */
+const API_KEY =
+"1a77148c8683422993aa94c9c8344189";
+const SYMBOL =
+"EUR/USD";
+/* =================================
+   EMA
+================================= */
+function EMA(values,period){
+if(values.length < period)
+return null;
+const multiplier =
+2/(period+1);
+let ema=0;
+for(let i=0;i<period;i++){
+ema+=values[i];
+}
+ema/=period;
+for(let i=period;i<values.length;i++){
+ema=
+((values[i]-ema)*multiplier)+ema;
+}
+return ema;
+}
+/* =================================
+   RSI 7
+================================= */
+function RSI(values,period=7){
+if(values.length<=period)
+return null;
+let gains=0;
+let losses=0;
+for(let i=1;i<=period;i++){
+const change=
+values[i]-values[i-1];
+if(change>0)
+gains+=change;
+else
+losses+=Math.abs(change);
+}
+let avgGain=
+gains/period;
+let avgLoss=
+losses/period;
+for(let i=period+1;i<values.length;i++){
+const change=
+values[i]-values[i-1];
+const gain=
+change>0 ? change : 0;
+const loss=
+change<0 ? Math.abs(change) : 0;
+avgGain=
+((avgGain*(period-1))+gain)/period;
+avgLoss=
+((avgLoss*(period-1))+loss)/period;
+}
+if(avgLoss===0)
+return 100;
+const rs=
+avgGain/avgLoss;
+return 100-(100/(1+rs));
+}
+/* =================================
+   تجميع 5 دقائق
+================================= */
+function getFiveMinuteTrend(candles){
+const groups=[];
+for(
+let i=0;
+i<candles.length;
+i+=5
+){
+const group=
+candles.slice(i,i+5);
+if(group.length<5)
+continue;
+groups.push({
+open:
+Number(group[0].open),
+close:
+Number(
+group[group.length-1].close
+)
+});
+}
+if(groups.length<6)
+return "محايد";
+const recent=
+groups.slice(-3);
+const previous=
+groups.slice(-6,-3);
+const recentAvg=
+recent.reduce(
+(a,b)=>a+b.close,0
+)/recent.length;
+const previousAvg=
+previous.reduce(
+(a,b)=>a+b.close,0
+)/previous.length;
+if(recentAvg>previousAvg)
+return "صاعد";
+if(recentAvg<previousAvg)
+return "هابط";
+return "محايد";
+}
+/* =================================
+   تحديد الإشارة
+================================= */
+function getSignal(
+rsi,
+ema9,
+ema26,
+trend
+){
+/*
+شراء:
+EMA9 > EMA26
+RSI >= 52
+5M صاعد
+بيع:
+EMA9 < EMA26
+RSI <= 48
+5M هابط
+*/
+if(
+ema9>ema26 &&
+rsi>=52 &&
+trend==="صاعد"
+){
+return {
+type:"buy",
+text:"🟢 شراء",
+reason:
+"EMA 9 أعلى من EMA 26 + RSI قوي + اتجاه 5M صاعد."
+};
+}
+if(
+ema9<ema26 &&
+rsi<=48 &&
+trend==="هابط"
+){
+return {
+type:"sell",
+text:"🔴 بيع",
+reason:
+"EMA 9 أسفل EMA 26 + RSI ضعيف + اتجاه 5M هابط."
+};
+}
+return {
+type:"wait",
+text:"🟡 انتظار",
+reason:
+"لا يوجد توافق قوي بين المؤشرات."
+};
+}
+/* =================================
+   جلب البيانات
+================================= */
+async function loadData(){
+const status=
+document.getElementById("status");
+status.innerText=
+"⏳ جاري جلب EUR/USD...";
+try{
+const url=
+"https://api.twelvedata.com/time_series"+
+"?apikey="+API_KEY+
+"&interval=1min"+
+"&symbol="+
+encodeURIComponent(SYMBOL)+
+"&outputsize=100"+
+"&format=JSON";
+const response=
+await fetch(url);
+const data=
+await response.json();
+if(data.status==="error"){
+throw new Error(
+data.message ||
+"خطأ في API"
+);
+}
+if(!data.values){
+throw new Error(
+"لم تصل بيانات الشموع."
+);
+}
+const candles=
+data.values.reverse();
+const closes=
+candles.map(
+x=>Number(x.close)
+);
+const price=
+closes[closes.length-1];
+const ema9=
+EMA(closes,9);
+const ema26=
+EMA(closes,26);
+const rsi=
+RSI(closes,7);
+const trend=
+getFiveMinuteTrend(
+candles
+);
+const result=
+getSignal(
+rsi,
+ema9,
+ema26,
+trend
+);
+/* عرض النتائج */
+document.getElementById("price")
+.innerText=
+price.toFixed(5);
+document.getElementById("rsi")
+.innerText=
+rsi.toFixed(2);
+document.getElementById("ema9")
+.innerText=
+ema9.toFixed(5);
+document.getElementById("ema26")
+.innerText=
+ema26.toFixed(5);
+document.getElementById("trend")
+.innerText=
+trend;
+document.getElementById("time")
+.innerText=
+candles[
+candles.length-1
+].datetime;
+const signal=
+document.getElementById("signal");
+signal.innerText=
+result.text;
+signal.className=
+"signalText "+
+result.type;
+document.getElementById("reason")
+.innerText=
+result.reason;
+status.innerText=
+"✅ آخر تحديث: "+
+new Date()
+.toLocaleTimeString("ar-SA");
+addHistory(
+candles[
+candles.length-1
+].datetime,
+result.text,
+price
+);
+}
+catch(error){
+status.innerText=
+"❌ "+error.message;
+}
+}
+/* =================================
+   سجل الإشارات
+================================= */
+function addHistory(
+time,
+signal,
+price
+){
+const history=
+document.getElementById(
+"history"
+);
+const item=
+document.createElement(
+"div"
+);
+item.className=
+"item";
+item.innerHTML=
+`
+<span>${time}</span>
+<span>${price.toFixed(5)}</span>
+<span>${signal}</span>
+`;
+history.prepend(item);
+}
+/* =================================
+   تشغيل
+================================= */
+loadData();
+/* تحديث كل دقيقة */
+setInterval(
+loadData,
+60000
+);
+</script>
+</body>
+</html>
