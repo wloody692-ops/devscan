@@ -1,0 +1,530 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>EUR/USD 3M Signal Pro</title>
+
+<style>
+body{
+margin:0;
+background:#070b14;
+color:white;
+font-family:Arial,sans-serif;
+}
+
+.container{
+max-width:600px;
+margin:auto;
+padding:15px;
+}
+
+.card{
+background:#11192a;
+border:1px solid #293653;
+border-radius:18px;
+padding:18px;
+margin-bottom:15px;
+}
+
+h1{
+text-align:center;
+margin:5px;
+font-size:20px;
+}
+
+.sub{
+text-align:center;
+color:#8d9ab2;
+font-size:13px;
+}
+
+.signal{
+margin-top:18px;
+padding:30px 10px;
+background:#09111f;
+border-radius:16px;
+text-align:center;
+}
+
+.signalText{
+font-size:40px;
+font-weight:900;
+}
+
+.buy{ color:#32e58b; }
+.sell{ color:#ff596d; }
+.wait{ color:#ffd166; }
+
+.reason{
+margin-top:10px;
+color:#aeb9cc;
+font-size:13px;
+line-height:1.6;
+}
+
+.score{
+margin-top:8px;
+font-size:12px;
+color:#8d9ab2;
+}
+
+.scoreBar{
+height:6px;
+background:#182238;
+border-radius:4px;
+margin-top:6px;
+overflow:hidden;
+}
+
+.scoreFill{
+height:100%;
+background:#2364ff;
+width:0%;
+transition:width .3s;
+}
+
+.grid{
+display:grid;
+grid-template-columns:1fr 1fr;
+gap:10px;
+margin-top:15px;
+}
+
+.metric{
+background:#182238;
+padding:12px;
+border-radius:11px;
+text-align:center;
+}
+
+.metric span{
+display:block;
+color:#8996af;
+font-size:12px;
+}
+
+.metric strong{
+display:block;
+margin-top:5px;
+font-size:16px;
+}
+
+button{
+width:100%;
+padding:14px;
+margin-top:18px;
+border:0;
+border-radius:11px;
+background:#2364ff;
+color:white;
+font-size:16px;
+font-weight:bold;
+}
+
+.status{
+text-align:center;
+color:#8d9ab2;
+font-size:12px;
+margin-top:12px;
+}
+
+.history{
+max-height:300px;
+overflow:auto;
+}
+
+.item{
+display:flex;
+justify-content:space-between;
+padding:10px 3px;
+border-bottom:1px solid #293653;
+font-size:12px;
+}
+
+.note{
+color:#78859d;
+font-size:11px;
+line-height:1.7;
+}
+
+.warn{
+color:#ffd166;
+font-size:12px;
+line-height:1.7;
+background:#2a2306;
+border:1px solid #4a3d0d;
+border-radius:10px;
+padding:10px;
+margin-bottom:12px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="card">
+
+<div class="warn">
+⚠️ لا يوجد نظام مؤشرات يضمن نجاح الصفقة. هذه الأداة تقلل الإشارات الضعيفة/الخاطئة فقط، وما تلغي المخاطرة. التداول على فريم الدقيقة (خصوصًا الخيارات الثنائية) نسبة مخاطرته عالية جدًا.
+</div>
+
+<h1>EUR/USD — 3 دقايق (نسخة محسّنة)</h1>
+
+<div class="sub">
+EMA 9/26/50 + RSI 7 + ATR + اتجاه 15M + تأكيد شمعتين
+</div>
+
+<div class="signal">
+
+<div id="signal" class="signalText wait">⏳ انتظار</div>
+
+<div id="reason" class="reason">جاري تحميل البيانات...</div>
+
+<div class="score">
+قوة التوافق: <span id="scoreText">0/5</span>
+<div class="scoreBar"><div id="scoreFill" class="scoreFill"></div></div>
+</div>
+
+</div>
+
+<div class="grid">
+
+<div class="metric"><span>السعر</span><strong id="price">-</strong></div>
+<div class="metric"><span>RSI 7</span><strong id="rsi">-</strong></div>
+<div class="metric"><span>EMA 9</span><strong id="ema9">-</strong></div>
+<div class="metric"><span>EMA 26</span><strong id="ema26">-</strong></div>
+<div class="metric"><span>EMA 50</span><strong id="ema50">-</strong></div>
+<div class="metric"><span>ATR 14</span><strong id="atr">-</strong></div>
+<div class="metric"><span>اتجاه 15M</span><strong id="trend">-</strong></div>
+<div class="metric"><span>آخر شمعة</span><strong id="time">-</strong></div>
+
+</div>
+
+<button onclick="loadData()">🔄 تحليل الآن</button>
+
+<div id="status" class="status">جاري الاتصال...</div>
+
+</div>
+
+
+<div class="card">
+<h3>📊 سجل الإشارات</h3>
+<div id="history" class="history"></div>
+</div>
+
+
+<div class="card">
+<div class="note">
+هذه الصفحة تحليلية فقط ولا تنفذ الصفقات تلقائيًا.
+الإشارة الأساسية على فريم 3 دقايق، بفلاتر إضافية لتقليل الإشارات الضعيفة.
+اتجاه 15 دقيقة (تجميع 5 شموع من فريم 3 دقايق) + EMA50 يُستخدمان كفلتر اتجاه عام.
+مؤشر ATR يُستخدم لتفادي فترات التذبذب الميت أو السبايكات المفاجئة.
+بيانات EUR/USD من Twelve Data وقد تختلف عن سعر منصتك (مثل ExpertOption)، خصوصًا في السبريد وقت الإغلاق/الافتتاح.
+</div>
+</div>
+
+</div>
+
+
+<script>
+
+/* =================================
+   Twelve Data API
+================================= */
+
+const API_KEY = "1a77148c8683422993aa94c9c8344189";
+const SYMBOL = "EUR/USD";
+const INTERVAL = "3min";
+
+/* أقل فارق زمني بين إشارتين متتاليتين من نفس النوع (مللي ثانية) - 3 شموع من 3 دقايق */
+const SIGNAL_COOLDOWN_MS = 9 * 60 * 1000;
+
+let lastSignalType = null;
+let lastSignalTime = 0;
+
+
+/* =================================
+   EMA
+================================= */
+
+function EMA(values, period){
+  if(values.length < period) return null;
+  const multiplier = 2/(period+1);
+  let ema = 0;
+  for(let i=0;i<period;i++) ema += values[i];
+  ema /= period;
+  for(let i=period;i<values.length;i++){
+    ema = ((values[i]-ema)*multiplier)+ema;
+  }
+  return ema;
+}
+
+/* يرجع سلسلة كاملة من قيم EMA (مو بس آخر قيمة) - نحتاجها لتأكيد شمعتين */
+function EMASeries(values, period){
+  if(values.length < period) return [];
+  const multiplier = 2/(period+1);
+  const out = new Array(values.length).fill(null);
+  let ema = 0;
+  for(let i=0;i<period;i++) ema += values[i];
+  ema /= period;
+  out[period-1] = ema;
+  for(let i=period;i<values.length;i++){
+    ema = ((values[i]-ema)*multiplier)+ema;
+    out[i] = ema;
+  }
+  return out;
+}
+
+
+/* =================================
+   RSI 7
+================================= */
+
+function RSI(values, period=7){
+  if(values.length<=period) return null;
+  let gains=0, losses=0;
+  for(let i=1;i<=period;i++){
+    const change = values[i]-values[i-1];
+    if(change>0) gains+=change; else losses+=Math.abs(change);
+  }
+  let avgGain = gains/period;
+  let avgLoss = losses/period;
+  for(let i=period+1;i<values.length;i++){
+    const change = values[i]-values[i-1];
+    const gain = change>0 ? change : 0;
+    const loss = change<0 ? Math.abs(change) : 0;
+    avgGain = ((avgGain*(period-1))+gain)/period;
+    avgLoss = ((avgLoss*(period-1))+loss)/period;
+  }
+  if(avgLoss===0) return 100;
+  const rs = avgGain/avgLoss;
+  return 100-(100/(1+rs));
+}
+
+
+/* =================================
+   ATR 14 (فلتر تذبذب)
+================================= */
+
+function ATR(candles, period=14){
+  if(candles.length <= period) return null;
+  const trs = [];
+  for(let i=1;i<candles.length;i++){
+    const high = Number(candles[i].high);
+    const low = Number(candles[i].low);
+    const prevClose = Number(candles[i-1].close);
+    const tr = Math.max(
+      high-low,
+      Math.abs(high-prevClose),
+      Math.abs(low-prevClose)
+    );
+    trs.push(tr);
+  }
+  const last = trs.slice(-period);
+  return last.reduce((a,b)=>a+b,0)/last.length;
+}
+
+
+/* =================================
+   تجميع 5 دقائق - اتجاه
+================================= */
+
+function getFiveMinuteTrend(candles){
+  const groups = [];
+  for(let i=0;i<candles.length;i+=5){
+    const group = candles.slice(i,i+5);
+    if(group.length<5) continue;
+    groups.push({
+      open: Number(group[0].open),
+      close: Number(group[group.length-1].close)
+    });
+  }
+  if(groups.length<6) return "محايد";
+  const recent = groups.slice(-3);
+  const previous = groups.slice(-6,-3);
+  const recentAvg = recent.reduce((a,b)=>a+b.close,0)/recent.length;
+  const previousAvg = previous.reduce((a,b)=>a+b.close,0)/previous.length;
+  if(recentAvg>previousAvg) return "صاعد";
+  if(recentAvg<previousAvg) return "هابط";
+  return "محايد";
+}
+
+
+/* =================================
+   تحديد الإشارة (نظام نقاط)
+================================= */
+
+function getSignal({
+  price, rsi, ema9, ema26, ema50, trend,
+  atr, closes, candles, ema9Series
+}){
+
+  const conditions = {
+    up: [],
+    down: []
+  };
+
+  /* 1) تقاطع EMA 9/26 */
+  if(ema9>ema26) conditions.up.push("EMA9>EMA26");
+  if(ema9<ema26) conditions.down.push("EMA9<EMA26");
+
+  /* 2) السعر بالنسبة لـ EMA50 (اتجاه عام أقوى) */
+  if(price>ema50) conditions.up.push("السعر فوق EMA50");
+  if(price<ema50) conditions.down.push("السعر تحت EMA50");
+
+  /* 3) RSI */
+  if(rsi>=52) conditions.up.push("RSI قوي");
+  if(rsi<=48) conditions.down.push("RSI ضعيف");
+
+  /* 4) اتجاه 5 دقائق */
+  if(trend==="صاعد") conditions.up.push("15M صاعد");
+  if(trend==="هابط") conditions.down.push("15M هابط");
+
+  /* 5) تأكيد آخر شمعتين تغلقان فوق/تحت EMA9 */
+  const n = closes.length;
+  const c1 = closes[n-1] > ema9Series[n-1];
+  const c2 = closes[n-2] > ema9Series[n-2];
+  if(c1 && c2) conditions.up.push("تأكيد شمعتين فوق EMA9");
+  if(!c1 && !c2) conditions.down.push("تأكيد شمعتين تحت EMA9");
+
+  /* فلتر ATR: لازم يكون فيه حركة كافية بدون سبايك جنوني */
+  const avgClose = closes.slice(-20).reduce((a,b)=>a+b,0)/20;
+  const atrRatio = (atr/avgClose)*100; // نسبة التذبذب من السعر
+
+  const tooQuiet = atrRatio < 0.015;   // سوق شبه ميت
+  const tooWild  = atrRatio > 0.15;    // تذبذب غير طبيعي / سبايك
+
+  const upScore = conditions.up.length;
+  const downScore = conditions.down.length;
+
+  let result;
+
+  if(tooQuiet){
+    result = { type:"wait", text:"🟡 انتظار", reason:"السوق هادئ جدًا حاليًا (تذبذب ضعيف) — فرصة دقة منخفضة.", score:0 };
+  } else if(tooWild){
+    result = { type:"wait", text:"🟡 انتظار", reason:"تذبذب مرتفع بشكل غير طبيعي (احتمال سبايك أو خبر) — أفضل تفادي الدخول الآن.", score:0 };
+  } else if(upScore>=4){
+    result = { type:"buy", text:"🟢 شراء", reason: conditions.up.join(" + ") + ".", score: upScore };
+  } else if(downScore>=4){
+    result = { type:"sell", text:"🔴 بيع", reason: conditions.down.join(" + ") + ".", score: downScore };
+  } else {
+    result = { type:"wait", text:"🟡 انتظار", reason:"لا يوجد توافق كافٍ بين المؤشرات (أقل من 4 من 5 شروط).", score: Math.max(upScore,downScore) };
+  }
+
+  return result;
+}
+
+
+/* =================================
+   جلب البيانات
+================================= */
+
+async function loadData(){
+
+  const status = document.getElementById("status");
+  status.innerText = "⏳ جاري جلب EUR/USD...";
+
+  try{
+
+    const url =
+      "https://api.twelvedata.com/time_series"+
+      "?apikey="+API_KEY+
+      "&interval="+INTERVAL+
+      "&symbol="+encodeURIComponent(SYMBOL)+
+      "&outputsize=100"+
+      "&format=JSON";
+
+    const response = await fetch(url);
+    const data = await response.json();
+
+    if(data.status==="error"){
+      throw new Error(data.message || "خطأ في API");
+    }
+    if(!data.values){
+      throw new Error("لم تصل بيانات الشموع.");
+    }
+
+    const candles = data.values.reverse();
+    const closes = candles.map(x=>Number(x.close));
+
+    const price = closes[closes.length-1];
+    const ema9 = EMA(closes,9);
+    const ema26 = EMA(closes,26);
+    const ema50 = EMA(closes,50);
+    const rsi = RSI(closes,7);
+    const atr = ATR(candles,14);
+    const trend = getFiveMinuteTrend(candles);
+    const ema9Series = EMASeries(closes,9);
+
+    if(ema9===null || ema26===null || ema50===null || rsi===null || atr===null){
+      throw new Error("بيانات غير كافية بعد لحساب كل المؤشرات (انتظر قليلاً).");
+    }
+
+    const result = getSignal({
+      price, rsi, ema9, ema26, ema50, trend, atr, closes, candles, ema9Series
+    });
+
+    /* عرض النتائج */
+    document.getElementById("price").innerText = price.toFixed(5);
+    document.getElementById("rsi").innerText = rsi.toFixed(2);
+    document.getElementById("ema9").innerText = ema9.toFixed(5);
+    document.getElementById("ema26").innerText = ema26.toFixed(5);
+    document.getElementById("ema50").innerText = ema50.toFixed(5);
+    document.getElementById("atr").innerText = atr.toFixed(5);
+    document.getElementById("trend").innerText = trend;
+    document.getElementById("time").innerText = candles[candles.length-1].datetime;
+
+    const signalEl = document.getElementById("signal");
+    signalEl.innerText = result.text;
+    signalEl.className = "signalText "+result.type;
+
+    document.getElementById("reason").innerText = result.reason;
+    document.getElementById("scoreText").innerText = result.score+"/5";
+    document.getElementById("scoreFill").style.width = ((result.score/5)*100)+"%";
+
+    status.innerText = "✅ آخر تحديث: "+new Date().toLocaleTimeString("ar-SA");
+
+    /* تسجيل فقط لو إشارة فعلية (شراء/بيع) وخارج فترة الكولداون */
+    const now = Date.now();
+    const isTradeSignal = result.type==="buy" || result.type==="sell";
+    const cooledDown = (now-lastSignalTime) > SIGNAL_COOLDOWN_MS;
+    const differentFromLast = result.type !== lastSignalType;
+
+    if(isTradeSignal && (cooledDown || differentFromLast)){
+      addHistory(candles[candles.length-1].datetime, result.text, price, result.score);
+      lastSignalType = result.type;
+      lastSignalTime = now;
+    }
+
+  } catch(error){
+    status.innerText = "❌ "+error.message;
+  }
+
+}
+
+
+/* =================================
+   سجل الإشارات
+================================= */
+
+function addHistory(time, signal, price, score){
+  const history = document.getElementById("history");
+  const item = document.createElement("div");
+  item.className = "item";
+  item.innerHTML = `
+    <span>${time}</span>
+    <span>${price.toFixed(5)}</span>
+    <span>${signal} (${score}/5)</span>
+  `;
+  history.prepend(item);
+}
+
+
+/* =================================
+   تشغيل
+================================= */
+
+loadData();
